@@ -1,0 +1,10 @@
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\bin\Debug\Telly_Control.exe.config
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\bin\Debug\Telly_Control.exe
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\bin\Debug\Telly_Control.pdb
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.csproj.AssemblyReference.cache
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.Properties.Resources.resources
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.Telly_control.resources
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.csproj.GenerateResource.cache
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.csproj.CoreCompileInputs.cache
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.exe
+D:\Repo\Radio---Tally\Telly Config\Telly_Control\Telly_Control\obj\Debug\Telly_Control.pdb
