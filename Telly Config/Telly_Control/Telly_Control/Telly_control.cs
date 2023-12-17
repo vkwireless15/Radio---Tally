@@ -65,6 +65,7 @@ namespace Telly_Control
             try
             {
                 SP.PortName = ComPortsList_.Text;
+                SP.BaudRate = 115200;
                 SP.DataReceived += GetComMessage;
                 SP.Open();
                 SP.Write("FW");
