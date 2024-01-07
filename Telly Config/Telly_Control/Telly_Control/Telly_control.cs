@@ -18,17 +18,18 @@ namespace Telly_Control
         char[] RX_BF;
         //byte[] RX_BFB = new byte[128];
         bool FirstStart = false;
-   
-        byte DevWorkMode = 0;
+
+        char DevWorkMode = '0';
         byte BatteryVal = 0;
-        byte Eter = 0;
+        char Eter = '0';
         string WifiVersion_ = "";
-        byte Connection = 0;
+        char Connection = '0';
         string APName = "";
         string Key = "";
         string Transmitter = "";
         string Receiver = "";
-        string Freq = "";
+        string RxFreq = "";
+        string TxFreq = "";
 
         byte RX_moduleConf = 0;
         byte TX_moduleConf = 0;
@@ -116,8 +117,8 @@ namespace Telly_Control
                 {
                     if (RX_BF[0] == 'D' && RX_BF[1] == 'V' && RX_BF[2] == 'M')
                     {
-                        DevWorkMode = (byte)RX_BF[3];
-                        if (DevWorkMode == 0)
+                        DevWorkMode = RX_BF[3];
+                        if (DevWorkMode == '0')
                         {
                             WorkMode.Invoke(new Action(() => { WorkMode.Text = "Режим: Ведущий"; }));
                         }
@@ -135,8 +136,8 @@ namespace Telly_Control
 
                     if (RX_BF[0] == 'D' && RX_BF[1] == 'V' && RX_BF[2] == 'E')
                     {
-                        Eter = (byte)RX_BF[3];
-                        if (Eter == 0)
+                        Eter = RX_BF[3];
+                        if (Eter == '0')
                         {
                             RadioMode.Invoke(new Action(() => { RadioMode.Text = "Эфир: RX"; }));
                         }
@@ -155,8 +156,8 @@ namespace Telly_Control
 
                     if (RX_BF[0] == 'W' && RX_BF[1] == 'F' && RX_BF[2] == 'C')
                     {
-                        Connection = (byte)RX_BF[3];
-                        if (Connection == 0)
+                        Connection = RX_BF[3];
+                        if (Connection == '0')
                         {
                             APstate.Invoke(new Action(() => { APstate.Text = "Состояние подключения: Не подключено"; }));
                         }
@@ -193,12 +194,19 @@ namespace Telly_Control
                         RadioRx.Invoke(new Action(() => { RadioRx.Text = "Приёмник:" + Receiver; }));
                     }
 
-                    if (RX_BF[0] == 'F' && RX_BF[1] == 'M' && RX_BF[2] == 'F')
+                    if (RX_BF[0] == 'F' && RX_BF[1] == 'H' && RX_BF[2] == 'T')
                     {
                         for (int i = 3; i < RX_BF.Length; i++)
-                        { Freq += RX_BF[i]; }
-                        Frequency.Invoke(new Action(() => { Frequency.Text = "Частота:" + Freq; }));
+                        { TxFreq += RX_BF[i]; }
+                        Frequency.Invoke(new Action(() => { Frequency.Text = "Частота передатчика:" + TxFreq; }));
                     }
+
+                    if (RX_BF[0] == 'F' && RX_BF[1] == 'H' && RX_BF[2] == 'R')
+                    {
+                        for (int i = 3; i < RX_BF.Length; i++)
+                        { RxFreq += RX_BF[i]; }
+                        FrequencyRx.Invoke(new Action(() => { FrequencyRx.Text = "Частота приёмника:" + RxFreq; }));
+                    } 
 
                     if (RX_BF[0] == 'C' && RX_BF[1] == 'N' && RX_BF[2] == 'F')
                     {
@@ -213,14 +221,14 @@ namespace Telly_Control
                         DevID.Invoke(new Action(() => { DevID.Text = "ID:" + ID; }));
                         Addr.Invoke(new Action(() => { Addr.Text = "Адрес:" + Address_.ToString(); }));
 
-                        if (TallyConf == 1)
+                        if (TallyConf == '1')
                         {
                             Tally.Invoke(new Action(() => { Tally.Text = "Tally: Активирован"; }));
                         }
                         else
                         { Tally.Invoke(new Action(() => { Tally.Text = "Tally: Не активирован"; })); }
 
-                        if (RX_moduleConf == 1)
+                        if (RX_moduleConf == '1')
                         {
                             RadioRx.Invoke(new Action(() => { RadioRx.Text = "Приёмник:" + Receiver + ", Активирован"; }));
                         }
@@ -229,7 +237,7 @@ namespace Telly_Control
                             RadioRx.Invoke(new Action(() => { RadioRx.Text = "Приёмник:" + Receiver + ", Не активирован"; }));
                         }
 
-                        if (TX_moduleConf == 1)
+                        if (TX_moduleConf == '1')
                         {
                             RadioTx.Invoke(new Action(() => { RadioTx.Text = "Передатчик:" + Transmitter + ", Активирован"; }));
                         }
@@ -238,7 +246,7 @@ namespace Telly_Control
                             RadioTx.Invoke(new Action(() => { RadioTx.Text = "Передатчик:" + Transmitter + ", Не активирован"; }));
                         }
 
-                        if(WiFi_moduleConf == 1)
+                        if(WiFi_moduleConf == '1')
                         {
                             WifiVersion.Invoke(new Action(() => { WifiVersion.Text = "Версия:" + WifiVersion_ + ", Активирован"; }));
                         }

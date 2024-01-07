@@ -55,6 +55,7 @@
             this.APstate = new System.Windows.Forms.Label();
             this.WifiVersion = new System.Windows.Forms.Label();
             this.Message_label = new System.Windows.Forms.Label();
+            this.FrequencyRx = new System.Windows.Forms.Label();
             this.ConnectionPanel.SuspendLayout();
             this.Controlls_panel.SuspendLayout();
             this.Slave_Control.SuspendLayout();
@@ -236,6 +237,7 @@
             // 
             // groupBox2
             // 
+            this.groupBox2.Controls.Add(this.FrequencyRx);
             this.groupBox2.Controls.Add(this.Frequency);
             this.groupBox2.Controls.Add(this.RadioRx);
             this.groupBox2.Controls.Add(this.RadioTx);
@@ -344,6 +346,15 @@
             this.Message_label.TabIndex = 2;
             this.Message_label.Text = "Устройсво не подключено!";
             // 
+            // FrequencyRx
+            // 
+            this.FrequencyRx.AutoSize = true;
+            this.FrequencyRx.Location = new System.Drawing.Point(6, 94);
+            this.FrequencyRx.Name = "FrequencyRx";
+            this.FrequencyRx.Size = new System.Drawing.Size(52, 13);
+            this.FrequencyRx.TabIndex = 7;
+            this.FrequencyRx.Text = "Частота:";
+            // 
             // Telly_control
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -400,6 +411,7 @@
         private System.Windows.Forms.Label DevID;
         private System.Windows.Forms.Label Addr;
         private System.Windows.Forms.Label Tally;
+        private System.Windows.Forms.Label FrequencyRx;
     }
 }
 
