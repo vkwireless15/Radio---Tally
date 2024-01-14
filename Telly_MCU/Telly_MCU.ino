@@ -245,7 +245,8 @@ void COM_Port_Commands()
   { 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'W')
      { 
-        COM_Write(FW_Version,26); 
+        //COM_Write(FW_Version,26);
+        Serial.print("TP_1.0.11.23 Tally - Phone"); 
      }
 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'R')
