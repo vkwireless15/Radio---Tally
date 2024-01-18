@@ -7,8 +7,8 @@
 
 #define Sw_bt 36
 #define ADC_IN 39
-#define Vol_P 25
-#define Vol_M 26
+#define Vol_P 14
+#define Vol_M 27
 
 #define PWR_Red 32
 #define PWR_Green 33
@@ -39,7 +39,7 @@ char i = 0;
 char FW_Version[] = {"TP_1.0.11.23 Tally - Phone"};
 
 char Battery = 100;
-char Eter = RX;
+char Eter = 0;
 char WifiVersion[] = {"esp32_WiFi"};
 char Connection = Not_connected;
 
@@ -55,6 +55,8 @@ char TX_module = 1;
 char WiFi_module = 0;
 char Tally = 1;
 
+byte Volume = 1;
+
 char Address = 255;
 char ID[] = {"AB"};
 
@@ -62,8 +64,7 @@ RDA5807 rx;
 
 unsigned int fm_freq_Tx = 10620;
 unsigned int fm_freq_Rx = 10620;
-
-char voltest = 0;
+int RSSI_val = 0;
 
 float EEPROM_float_read(int addr)
 {   
@@ -243,6 +244,7 @@ void COM_Port_Commands()
 {
   if(COM_Read() == 1)
   { 
+     HAL_Delay(10);
      if(RX_Message[0] == 'F' && RX_Message[1] == 'W')
      { 
         //COM_Write(FW_Version,26);
@@ -313,7 +315,7 @@ void COM_Port_Commands()
         TX_Message[1] = 'F';
         TX_Message[2] = 'V';
         COM_Write(TX_Message, 3);
-        //COM_Write(WifiVersion, 1);
+        COM_Write(WifiVersion, 1);
         HAL_Delay(100);
 
         TX_Clear();
@@ -781,6 +783,10 @@ void setup() {
   pinMode(Tally2_Red, OUTPUT);
   pinMode(Tally2_Green, OUTPUT);
 
+  digitalWrite(Vol_P, HIGH);
+  digitalWrite(Vol_M, HIGH);
+  digitalWrite(Sw_bt, HIGH);
+
   Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
   delay(50);
     
@@ -826,18 +832,65 @@ void setup() {
   digitalWrite(Tally1_Green, LOW);
   digitalWrite(Tally2_Green, LOW);
 
-  rx.setup();
-  rx.setFrequency(fm_freq_Rx);
-  rx.setVolume(7);
-  rx.setMono(0);
 
-  fmtx_init(fm_freq_Tx, EUROPE); 
+  if(RX_module == 1)
+  {
+    digitalWrite(TX_Green, HIGH);
+    rx.setup();
+    rx.setFrequency(fm_freq_Rx);
+    rx.setVolume(Volume);
+    rx.setMono(0);
+  }
+  
+  if(TX_module == 1)
+  {
+    fmtx_init(fm_freq_Tx, EUROPE);
+  } 
+
+  if(WiFi_module == 1)
+  {
+    digitalWrite(WiFi_Red, HIGH);
+  }
 }
 
 void loop() {
   COM_Port_Commands(); 
-  //Serial.println(rx.getRssi());
-  
+
+  if(digitalRead(Vol_P) == 0)
+  {
+    Volume++;
+    if(Volume > 15)
+    Volume = 15;
+   // if(RX_module == 1)
+   // { rx.setVolume(Volume); }
+   // delay(100);
+  }
+  if(digitalRead(Vol_M) == 0)
+  {
+    if(Volume > 0)
+    Volume--;
+   // if(RX_module == 1)
+   // { rx.setVolume(Volume); }
+   // delay(100);
+  }
+
+
+  if(RX_module == 1)
+  {
+    RSSI_val = rx.getRssi();
+    if(RSSI_val > 50)
+    { 
+      rx.setMute(false);
+      digitalWrite(TX_Green, HIGH); 
+    }
+    else
+    { 
+      rx.setMute(true); 
+      digitalWrite(TX_Green, LOW);
+    }
+    
+    delay(50);
+  }
   
   if(WorkMode == Master)
   {
