@@ -27,7 +27,9 @@
 #define ESP32_I2C_SDA 21
 #define ESP32_I2C_SCL 22
 
-
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiAP.h>
 #include <KT0803L.h>
 #include <RDA5807_esp.h>
 #include <EEPROM.h>
@@ -61,10 +63,13 @@ char Address = 255;
 char ID[] = {"AB"};
 
 RDA5807 rx; 
+WiFiServer Dev_server(90);
+WiFiServer App_server(80);
 
 unsigned int fm_freq_Tx = 10620;
 unsigned int fm_freq_Rx = 10620;
 int RSSI_val = 0;
+char ConnectMode = 0;
 
 float EEPROM_float_read(int addr)
 {   
@@ -832,72 +837,119 @@ void setup() {
   digitalWrite(Tally1_Green, LOW);
   digitalWrite(Tally2_Green, LOW);
 
-
-  if(RX_module == 1)
+  if(digitalRead(Sw_bt) == 0)
   {
-    digitalWrite(TX_Green, HIGH);
-    rx.setup();
-    rx.setFrequency(fm_freq_Rx);
-    rx.setVolume(Volume);
-    rx.setMono(0);
+    if (!WiFi.softAP("TellyConfig", "AdminConfigAP")) 
+    {
+      Serial.print("AP error");
+      while(1);
+    }
+    IPAddress myIP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(myIP);
+    Dev_server.begin();
+    App_server.begin();
+    ConnectMode = 1;
   }
+  else
+  {
+    if(RX_module == 1)
+    {
+      digitalWrite(TX_Green, HIGH);
+      rx.setup();
+      rx.setFrequency(fm_freq_Rx);
+      rx.setVolume(Volume);
+      rx.setMono(0);
+    }
   
-  if(TX_module == 1)
-  {
-    fmtx_init(fm_freq_Tx, EUROPE);
-  } 
+    if(TX_module == 1)
+    {
+      fmtx_init(fm_freq_Tx, EUROPE);
+    } 
 
-  if(WiFi_module == 1)
-  {
-    digitalWrite(WiFi_Red, HIGH);
+    if(WiFi_module == 1)
+    {
+      digitalWrite(WiFi_Red, HIGH);
+    }
   }
 }
 
 void loop() {
-  COM_Port_Commands(); 
 
-  if(digitalRead(Vol_P) == 0)
+  if(ConnectMode == 1)
   {
-    Volume++;
-    if(Volume > 15)
-    Volume = 15;
-   // if(RX_module == 1)
-   // { rx.setVolume(Volume); }
-   // delay(100);
-  }
-  if(digitalRead(Vol_M) == 0)
-  {
-    if(Volume > 0)
-    Volume--;
-   // if(RX_module == 1)
-   // { rx.setVolume(Volume); }
-   // delay(100);
-  }
-
-
-  if(RX_module == 1)
-  {
-    RSSI_val = rx.getRssi();
-    if(RSSI_val > 50)
-    { 
-      rx.setMute(false);
-      digitalWrite(TX_Green, HIGH); 
+    WiFiClient Dev_client = Dev_server.available();
+    WiFiClient App_client = App_server.available();
+    if (Dev_client) 
+    {                                   
+      while (Dev_client.connected()) 
+      {            
+        if (Dev_client.available()) 
+        {             
+          char c = Dev_client.read();            
+        }
+      }
+      Dev_client.stop();
     }
-    else
-    { 
-      rx.setMute(true); 
-      digitalWrite(TX_Green, LOW);
+
+    if (App_client) 
+    {                                   
+      while (App_client.connected()) 
+      {            
+        if (App_client.available()) 
+        {             
+          char c = App_client.read();            
+        }
+      }
+      App_client.stop();
     }
-    
-    delay(50);
-  }
-  
-  if(WorkMode == Master)
-  {
-    
   }
   else
   {
+     COM_Port_Commands(); 
+     if(digitalRead(Vol_P) == 0)
+     {
+       Volume++;
+       if(Volume > 15)
+       Volume = 15;
+       // if(RX_module == 1)
+       // { rx.setVolume(Volume); 
+       // delay(100);
+     }  
+   
+     if(digitalRead(Vol_M) == 0)
+     {
+       if(Volume > 0)
+       Volume--;
+       // if(RX_module == 1)
+       // { rx.setVolume(Volume); 
+       // delay(100);
+     }
+
+     if(RX_module == 1)
+     {
+       RSSI_val = rx.getRssi();
+       if(RSSI_val > 50)
+       { 
+          rx.setMute(false);
+          digitalWrite(TX_Green, HIGH); 
+       }
+       else
+       { 
+          rx.setMute(true); 
+          digitalWrite(TX_Green, LOW);
+       }
     
+       delay(50);
+     }
+  
+     if(WorkMode == Master)
+     {
+    
+     }
+     else
+     {
+    
+     }
   }
 }
