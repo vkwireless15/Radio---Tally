@@ -48,14 +48,15 @@ char Connection = Not_connected;
 char Access_point[] = {"                                        "};
 char Key[] = {"                                        "};
 
-char Transmitter[] = {"KT0803    "};
-char Receiver[] = {"RDA5807   "};
+char Transmitter[] = {"KT0803"};
+char Receiver[] = {"RDA5807"};
 
 char WorkMode = Master;
 char RX_module = 1;
 char TX_module = 1;
 char WiFi_module = 0;
 char Tally = 1;
+char ButtonHold = 0;
 
 byte Volume = 1;
 
@@ -158,7 +159,8 @@ void EEPROM_Read_Settings()
   EEPROM_Arr_read(Access_point, 36, 40);
   EEPROM_Arr_read(Key, 76, 40);
 
-  //146 - free
+  ButtonHold = EEPROM.read(117);
+  //118 - free
 }
 
 void HAL_Delay(unsigned int n)
@@ -320,7 +322,8 @@ void COM_Port_Commands()
         TX_Message[1] = 'F';
         TX_Message[2] = 'V';
         COM_Write(TX_Message, 3);
-        COM_Write(WifiVersion, 1);
+        //COM_Write(WifiVersion, CharCnt(WifiVersion));
+        Serial.print("ESP32_WiFi");
         HAL_Delay(100);
 
         TX_Clear();
@@ -759,6 +762,35 @@ void COM_Port_Commands()
           COM_Write(TX_Message, 6);
         }
      }
+
+     if(RX_Message[0] == 'L' && RX_Message[1] == 'B' && RX_Message[2] == 'T')
+     {
+        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        {
+          if(RX_Message[3] == '1')
+          { EEPROM.write(117, 1); }
+          else
+          { EEPROM.write(117, 0); }
+          EEPROM.commit();
+          TX_Message[0] = 'L';
+          TX_Message[1] = 'B';
+          TX_Message[2] = 'T';
+          TX_Message[3] = ' ';
+          TX_Message[4] = 'O';
+          TX_Message[5] = 'K';
+          COM_Write(TX_Message, 6);
+        }
+        else
+        {
+          TX_Message[0] = 'L';
+          TX_Message[1] = 'B';
+          TX_Message[2] = 'T';
+          TX_Message[3] = ' ';
+          TX_Message[4] = 'E';
+          TX_Message[5] = 'R';
+          COM_Write(TX_Message, 6);
+        }
+     }
      
      RX_Clear();
   }
@@ -865,6 +897,8 @@ void setup() {
     if(TX_module == 1)
     {
       fmtx_init(fm_freq_Tx, EUROPE);
+      delay(10);
+      Eter_State(0);
     } 
 
     if(WiFi_module == 1)
@@ -876,6 +910,7 @@ void setup() {
 
 void loop() {
 
+  static byte Bt_ctrl;
   if(ConnectMode == 1)
   {
     WiFiClient Dev_client = Dev_server.available();
@@ -940,12 +975,37 @@ void loop() {
           digitalWrite(TX_Green, LOW);
        }
     
-       delay(50);
+       delay(20);
      }
+     
   
      if(WorkMode == Master)
      {
-    
+        if(fm_freq_Tx != fm_freq_Rx)
+        {
+
+        }
+        else
+        {
+           if(digitalRead(Sw_bt) == 0)
+           {
+              if(Eter == 0 && ButtonHold != 1)
+              {
+                digitalWrite(TX_Red, HIGH);
+                Eter_State(1);
+                Eter = 1;
+              }
+           }
+           else
+           {
+              if(Eter == 1 && ButtonHold != 1)
+              {
+                digitalWrite(TX_Red, LOW);
+                Eter_State(0);
+                Eter = 0;
+              }
+           }
+        }
      }
      else
      {

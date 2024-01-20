@@ -198,14 +198,14 @@ namespace Telly_Control
                     {
                         for (int i = 3; i < RX_BF.Length; i++)
                         { TxFreq += RX_BF[i]; }
-                        Frequency.Invoke(new Action(() => { Frequency.Text = "Частота передатчика:" + TxFreq; }));
+                        Frequency.Invoke(new Action(() => { Frequency.Text = "Частота передатчика:" + TxFreq + "FM"; }));
                     }
 
                     if (RX_BF[0] == 'F' && RX_BF[1] == 'H' && RX_BF[2] == 'R')
                     {
                         for (int i = 3; i < RX_BF.Length; i++)
                         { RxFreq += RX_BF[i]; }
-                        FrequencyRx.Invoke(new Action(() => { FrequencyRx.Text = "Частота приёмника:" + RxFreq; }));
+                        FrequencyRx.Invoke(new Action(() => { FrequencyRx.Text = "Частота приёмника:" + RxFreq + "FM"; }));
                     } 
 
                     if (RX_BF[0] == 'C' && RX_BF[1] == 'N' && RX_BF[2] == 'F')
