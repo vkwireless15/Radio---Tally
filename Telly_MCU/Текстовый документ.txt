@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><title>ESP32 Tally - Phone</title>
+
+<style>.rectangle{ display: flex; width: 983px; padding: 10px 0px; justify-content: center; align-items: center; background: #4DD694;}
+
+.text_center_middle{color: #393E6A;text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);font-family: Inter;font-size: 20px;font-style: normal;font-weight: 400;	line-height: normal;}
+
+.text_Descr{color: #000;font-family: Inter;font-size: 20px;font-style: normal;font-weight: 400;line-height: normal;}
+
+.button_{ background: #1B9911; display: inline-flex; padding: 4px 40px 5px 41px; justify-content: center; align-items: center; border: none; margin: 0px 20px 0px 0px;}
+
+.button_text{color: #FCFCFC;text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);font-family: Inter;font-size: 32px;font-style: normal;font-weight: 400;line-height: normal;}
+
+.text_New{color: #039600;font-family: Inter;font-size: 20px;font-style: normal;font-weight: 400;line-height: normal;margin: 0px 0px 5px 230px;} </style>
+
+</head><body style="background-color: #E5E5E5;">
+
+<div class="rectangle text_center_middle">TP_1.0.11.23 Tally - Phone</div>
+
+<p class="text_Descr">Device mode:</p>
+<p class="text_Descr">Device ID:</p>
+<p class="text_Descr">Device address:</p>
+<p class="text_Descr">RX Frequency:</p>
+<p class="text_Descr">TX Frequency:</p>
+<p class="text_Descr">WiFi AP:</p>
+
+<p class="text_New">New connection</p>
+
+<a href="Settings"><button class="button_ button_text">Settings</button></a>
+<a href="SetSlave"><button class="button_ button_text">Set Slave</button></a>
+<a href="Reload"><button class="button_ button_text">Reload</button></a>
+<a href="Restart"><button class="button_ button_text">Restart</button></a>
+
+<p class="text_Descr">CMD:</p>
+<p><input type = "text" name = "CMD"/> <a href = "CMD_OK"><button>Ok</button></a></p>
+
+</body></html>

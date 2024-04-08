@@ -28,7 +28,9 @@
 #define ESP32_I2C_SCL 22
 
 #include <WiFi.h>
-#include <WiFiClient.h>
+//#include <WiFiClient.h>
+#include <WebServer.h>
+//#include <ESPmDNS.h>
 #include <WiFiAP.h>
 #include <KT0803L.h>
 #include <RDA5807_esp.h>
@@ -58,14 +60,16 @@ char WiFi_module = 0;
 char Tally = 1;
 char ButtonHold = 0;
 
-byte Volume = 1;
+byte Volume = 15;
 
 char Address = 255;
 char ID[] = {"AB"};
 
 RDA5807 rx; 
-WiFiServer Dev_server(90);
-WiFiServer App_server(80);
+//WiFiServer Dev_server(90);
+//WiFiServer App_server(80);
+
+WebServer App_server(80);
 
 unsigned int fm_freq_Tx = 10620;
 unsigned int fm_freq_Rx = 10620;
@@ -120,11 +124,6 @@ void EEPROM_ERASE()
   for(int k = 0; k<1024; k++)
   { EEPROM.write(k,0); }
   EEPROM.commit();
-}
-
-void GetFreq(char Arr[])
-{
-  
 }
 
 void EEPROM_Read_Settings()
@@ -425,7 +424,14 @@ void COM_Port_Commands()
         
         TX_Message[8] = ID[0];
         TX_Message[9] = ID[1];
-        COM_Write(TX_Message, 10);
+
+        if(ButtonHold == 0)
+        { TX_Message[10] = '0'; }
+        
+        if(ButtonHold == 1)
+        { TX_Message[10] = '1'; }
+        
+        COM_Write(TX_Message, 11);
         HAL_Delay(100);
      }
 
@@ -533,6 +539,13 @@ void COM_Port_Commands()
            EEPROM.write(5, F >> 8 & 0xff);
            EEPROM.write(6, F & 0xff);
            EEPROM.commit();
+  
+           if(TX_module == 1)
+           {
+             fmtx_init(fm_freq_Tx, EUROPE);
+             delay(10);
+             Eter_State(0);
+           } 
 
            TX_Clear();
            TX_Message[0] = 'F';
@@ -567,6 +580,10 @@ void COM_Port_Commands()
            EEPROM.write(9, (F >> 8) & 0xff);
            EEPROM.write(10, F & 0xff);
            EEPROM.commit();
+           if(RX_module == 1)
+           {
+              rx.setFrequency(fm_freq_Rx);
+           }           
            TX_Clear();
            TX_Message[0] = 'F';
            TX_Message[1] = 'H';
@@ -652,9 +669,9 @@ void COM_Port_Commands()
         if(RX_Message[3] == '1' || RX_Message[3] == '0')
         {
           if(RX_Message[3] == '1')
-          { EEPROM.write(12, 1); }
+          { EEPROM.write(12, 1); RX_module = 1;}
           else
-          { EEPROM.write(12, 0); }
+          { EEPROM.write(12, 0); RX_module = 0;}
           EEPROM.commit();
           TX_Message[0] = 'R';
           TX_Message[1] = 'X';
@@ -681,9 +698,9 @@ void COM_Port_Commands()
         if(RX_Message[3] == '1' || RX_Message[3] == '0')
         {
           if(RX_Message[3] == '1')
-          { EEPROM.write(13, 1); }
+          { EEPROM.write(13, 1); TX_module = 1;}
           else
-          { EEPROM.write(13, 0); }
+          { EEPROM.write(13, 0); TX_module = 0;}
           EEPROM.commit();
           TX_Message[0] = 'T';
           TX_Message[1] = 'X';
@@ -710,9 +727,9 @@ void COM_Port_Commands()
         if(RX_Message[3] == '1' || RX_Message[3] == '0')
         {
           if(RX_Message[3] == '1')
-          { EEPROM.write(15, 1); }
+          { EEPROM.write(15, 1); Tally = 1;}
           else
-          { EEPROM.write(15, 0); }
+          { EEPROM.write(15, 0); Tally = 0;}
           EEPROM.commit();
           TX_Message[0] = 'T';
           TX_Message[1] = 'L';
@@ -768,9 +785,9 @@ void COM_Port_Commands()
         if(RX_Message[3] == '1' || RX_Message[3] == '0')
         {
           if(RX_Message[3] == '1')
-          { EEPROM.write(117, 1); }
+          { EEPROM.write(117, 1); ButtonHold = 1;}
           else
-          { EEPROM.write(117, 0); }
+          { EEPROM.write(117, 0); ButtonHold = 0;}
           EEPROM.commit();
           TX_Message[0] = 'L';
           TX_Message[1] = 'B';
@@ -791,9 +808,273 @@ void COM_Port_Commands()
           COM_Write(TX_Message, 6);
         }
      }
+
+     if(RX_Message[0] == 'R' && RX_Message[1] == 'B' && RX_Message[2] == 'T')
+     {
+        Serial.print("Reboot...");
+        ESP.restart();
+     }
      
      RX_Clear();
   }
+}
+
+void CLR(char Arr[], int k)
+{
+  for(i = 0; i<k; i++)
+  { Arr[i] = 0; }
+}
+
+void handleRoot() {
+  char temp[2048];
+
+  String Wmode = "";
+  String DevID = (String)ID[0] + (String)ID[1];
+  if(WorkMode == 0)
+  Wmode = "Master";
+  else
+  Wmode = "Slave";
+
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">TP_1.0.11.23 Tally - Phone</div>\
+ <p class=\"text_Descr\">Device mode: %s</p>\
+ <p class=\"text_Descr\">Device ID: %s</p>\
+ <p class=\"text_Descr\">Device address: %d</p>\
+ <p class=\"text_Descr\">RX Frequency: %3.1f</p>\
+ <p class=\"text_Descr\">TX Frequency: %3.1f</p>\
+ <p class=\"text_Descr\">WiFi AP: %s</p>\
+ <a href=\"Settings\"><button class=\"button_ button_text\">Settings</button></a>\
+ <a href=\"SetSlave\"><button class=\"button_ button_text\">Set Slave</button></a>\
+ <a href=\"Reload\"><button class=\"button_ button_text\">Reload</button></a>\
+ <a href=\"Restart\"><button class=\"button_ button_text\">Restart</button></a>\
+ <p class=\"text_Descr\">CMD:</p>\
+ <form action = \"/get\">\
+ <p><input type = \"text\" name = \"CMD\"/>\
+ <input type = \"submit\" value = \"Ok\">\
+ </form>\
+ </body>\
+ </html>", Wmode, DevID, Address, fm_freq_Rx / (float)100, fm_freq_Tx / (float)100, Access_point);
+  
+  App_server.send(200, "text/html", temp);
+}
+void Settings()
+{
+  char temp[2048];
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">TP_1.0.11.23 Tally - Phone</div>\
+ </body>\
+ </html>");
+  App_server.send(200, "text/html", temp);
+}
+void HTTP_qe()
+{
+  char temp[2048];
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">HTTP</div>\
+ </body>\
+ </html>");
+  App_server.send(200, "text/html", temp);
 }
 
 void setup() {
@@ -871,6 +1152,7 @@ void setup() {
 
   if(digitalRead(Sw_bt) == 0)
   {
+    digitalWrite(WiFi_Red, HIGH);
     if (!WiFi.softAP("TellyConfig", "AdminConfigAP")) 
     {
       Serial.print("AP error");
@@ -879,9 +1161,16 @@ void setup() {
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(myIP);
-    Dev_server.begin();
-    App_server.begin();
     ConnectMode = 1;
+
+    App_server.on("/", handleRoot);
+    App_server.on("/Reload", handleRoot);
+    App_server.on("/Settings", Settings);
+    App_server.on("/GET", HTTP_GET,HTTP_qe);
+    App_server.begin();
+
+    digitalWrite(WiFi_Red, LOW);
+    digitalWrite(WiFi_Green, HIGH);
   }
   else
   {
@@ -910,34 +1199,10 @@ void setup() {
 
 void loop() {
 
-  static byte Bt_ctrl;
   if(ConnectMode == 1)
   {
-    WiFiClient Dev_client = Dev_server.available();
-    WiFiClient App_client = App_server.available();
-    if (Dev_client) 
-    {                                   
-      while (Dev_client.connected()) 
-      {            
-        if (Dev_client.available()) 
-        {             
-          char c = Dev_client.read();            
-        }
-      }
-      Dev_client.stop();
-    }
-
-    if (App_client) 
-    {                                   
-      while (App_client.connected()) 
-      {            
-        if (App_client.available()) 
-        {             
-          char c = App_client.read();            
-        }
-      }
-      App_client.stop();
-    }
+    App_server.handleClient();
+    delay(2);
   }
   else
   {
@@ -983,7 +1248,30 @@ void loop() {
      {
         if(fm_freq_Tx != fm_freq_Rx)
         {
-
+           if(digitalRead(Sw_bt) == 0)
+           {
+              if(Eter == 0)
+              {
+                if(Get_Eter_State() == 0)
+                {
+                  digitalWrite(TX_Red, HIGH);
+                  Eter_State(1);
+                }
+                else
+                {
+                  digitalWrite(TX_Red, LOW);
+                  Eter_State(0);
+                }
+                Eter = 1;
+              }
+           }
+           else
+           {
+              if(Eter == 1)
+              {
+                Eter = 0;
+              }
+           }
         }
         else
         {
@@ -995,6 +1283,22 @@ void loop() {
                 Eter_State(1);
                 Eter = 1;
               }
+
+              if(Eter == 0 && ButtonHold == 1)
+              {
+                if(Get_Eter_State() == 0)
+                {
+                  digitalWrite(TX_Red, HIGH);
+                  Eter_State(1);
+                }
+                else
+                {
+                  digitalWrite(TX_Red, LOW);
+                  Eter_State(0);
+                }
+
+                Eter = 1;
+              }
            }
            else
            {
@@ -1004,12 +1308,34 @@ void loop() {
                 Eter_State(0);
                 Eter = 0;
               }
+
+              if(Eter == 1 && ButtonHold == 1)
+              {
+                Eter = 0;
+              }
            }
         }
      }
      else
      {
-    
+        if(digitalRead(Sw_bt) == 0)
+        {
+           if(Eter == 0)
+           {
+             digitalWrite(TX_Red, HIGH);
+             Eter_State(1);
+             Eter = 1;
+           }
+        }
+        else
+        {
+          if(Eter == 1)
+          {
+            digitalWrite(TX_Red, LOW);
+            Eter_State(0);
+            Eter = 0;
+          }
+        }
      }
   }
 }
