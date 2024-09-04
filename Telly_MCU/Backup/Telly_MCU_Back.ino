@@ -28,6 +28,9 @@
 #define ESP32_I2C_SCL 22
 
 #include <WiFi.h>
+//#include <WiFiClient.h>
+#include <WebServer.h>
+//#include <ESPmDNS.h>
 #include <WiFiAP.h>
 #include <KT0803L.h>
 #include <RDA5807_esp.h>
@@ -44,8 +47,8 @@ char Eter = 0;
 char WifiVersion[] = {"esp32_WiFi"};
 char Connection = Not_connected;
 
-String Access_point;
-String Key;
+char Access_point[] = {"                                        "};
+char Key[] = {"                                        "};
 
 char Transmitter[] = {"KT0803"};
 char Receiver[] = {"RDA5807"};
@@ -63,6 +66,10 @@ char Address = 255;
 char ID[] = {"AB"};
 
 RDA5807 rx; 
+//WiFiServer Dev_server(90);
+//WiFiServer App_server(80);
+
+WebServer App_server(80);
 
 unsigned int fm_freq_Tx = 10620;
 unsigned int fm_freq_Rx = 10620;
@@ -92,11 +99,6 @@ void EEPROM_Arr_read(char Arr[], int addr, int cnt)
   }
 }
 
-void EEPROM_AP_read()
-{
-  
-}
-
 void EE_Erase_sector(int StartAddr,int StopAddr)
 {
   for(int i = StartAddr; i<StopAddr; i++)
@@ -106,10 +108,10 @@ void EE_Erase_sector(int StartAddr,int StopAddr)
   EEPROM.commit();
 }
 
-void EEPROM_Arr_write(char Arr[], int EE_addr, int St_addr, int Stp_addr, int cnt)
+void EEPROM_Arr_write(char Arr[], int EE_addr, int St_addr, int cnt)
 {
   char cnt_ = 0;
-  for(int i = St_addr; i<Stp_addr; i++)
+  for(int i = St_addr; i<cnt; i++)
   {
      EEPROM.write(EE_addr + cnt_ ,Arr[i]);
      cnt_++;
@@ -155,9 +157,6 @@ void EEPROM_Read_Settings()
   EEPROM_Arr_read(WifiVersion, 16, 20);
   EEPROM_Arr_read(Access_point, 36, 40);
   EEPROM_Arr_read(Key, 76, 40);
-
-  EEPROM_AP_read();
-  EEPROM_KY_read();
 
   ButtonHold = EEPROM.read(117);
   //118 - free
@@ -276,18 +275,6 @@ void COM_Port_Commands()
         digitalWrite(WiFi_Red, LOW);
         digitalWrite(Tally1_Red, LOW);
         digitalWrite(Tally2_Red, LOW);
-     }
-
-     if(RX_Message[0] == 'A' && RX_Message[1] == 'P')
-     { 
-        Serial.print("Access point:"); 
-        Serial.print(Access_point); 
-     }
-
-     if(RX_Message[0] == 'K' && RX_Message[1] == 'Y')
-     {  
-        Serial.print("Key:"); 
-        Serial.print(Key);
      }
      
      if(RX_Message[0] == 'G' && RX_Message[1] == 'P')
@@ -838,16 +825,263 @@ void CLR(char Arr[], int k)
   { Arr[i] = 0; }
 }
 
-void setup() {
-  char WiFi_Connect_CNT = 0;
-  Serial.begin(115200);
-  EEPROM.begin(1024);
-  Serial.println("Starting system...");
-  Serial.println("Reading settings from EEPROM");
-  EEPROM_Read_Settings();
-  Serial.println("Reading settings from EEPROM ... Ok");
+void handleRoot() {
+  char temp[2048];
 
-  Serial.println("Config. HW");
+  String Wmode = "";
+  String DevID = (String)ID[0] + (String)ID[1];
+  if(WorkMode == 0)
+  Wmode = "Master";
+  else
+  Wmode = "Slave";
+
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">TP_1.0.11.23 Tally - Phone</div>\
+ <p class=\"text_Descr\">Device mode: %s</p>\
+ <p class=\"text_Descr\">Device ID: %s</p>\
+ <p class=\"text_Descr\">Device address: %d</p>\
+ <p class=\"text_Descr\">RX Frequency: %3.1f</p>\
+ <p class=\"text_Descr\">TX Frequency: %3.1f</p>\
+ <p class=\"text_Descr\">WiFi AP: %s</p>\
+ <a href=\"Settings\"><button class=\"button_ button_text\">Settings</button></a>\
+ <a href=\"SetSlave\"><button class=\"button_ button_text\">Set Slave</button></a>\
+ <a href=\"Reload\"><button class=\"button_ button_text\">Reload</button></a>\
+ <a href=\"Restart\"><button class=\"button_ button_text\">Restart</button></a>\
+ <p class=\"text_Descr\">CMD:</p>\
+ <form action = \"/get\">\
+ <p><input type = \"text\" name = \"CMD\"/>\
+ <input type = \"submit\" value = \"Ok\">\
+ </form>\
+ </body>\
+ </html>", Wmode, DevID, Address, fm_freq_Rx / (float)100, fm_freq_Tx / (float)100, Access_point);
+  
+  App_server.send(200, "text/html", temp);
+}
+void Settings()
+{
+  char temp[2048];
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">TP_1.0.11.23 Tally - Phone</div>\
+ </body>\
+ </html>");
+  App_server.send(200, "text/html", temp);
+}
+void HTTP_qe()
+{
+  char temp[2048];
+  snprintf(temp, 2048,
+
+           "<html>\
+ <html>\
+ <head>\
+ <title>ESP32 Tally - Phone</title>\
+ <style>\
+.rectangle\
+{\  
+  display: flex;\
+    width: 983px;\
+    padding: 10px 0px;\
+    justify-content: center;\
+    align-items: center;\
+  background: #4DD694;\
+}\
+.text_center_middle\
+{\
+  color: #393E6A;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_Descr\
+{\
+  color: #000;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.button_\
+{\
+  background: #1B9911;\
+  display: inline-flex;\
+  padding: 4px 40px 5px 41px;\
+  justify-content: center;\
+  align-items: center;\
+  border: none;\
+  margin: 0px 20px 0px 0px;\
+}\
+.button_text\
+{\
+  color: #FCFCFC;\
+  text-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);\
+  font-family: Inter;\
+  font-size: 32px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+}\
+.text_New\
+{\
+  color: #039600;\
+  font-family: Inter;\
+  font-size: 20px;\
+  font-style: normal;\
+  font-weight: 400;\
+  line-height: normal;\
+  margin: 0px 0px 5px 230px;\
+}\
+ </style>\
+ </head>\
+ <body style=\"background-color: #E5E5E5;\">\
+ <div class=\"rectangle text_center_middle\">HTTP</div>\
+ </body>\
+ </html>");
+  App_server.send(200, "text/html", temp);
+}
+
+void setup() {
+  EEPROM.begin(1024);
+  EEPROM_Read_Settings();
+  Serial.begin(115200);
+
   pinMode(Sw_bt, INPUT);
   pinMode(ADC_IN, INPUT);
   pinMode(Vol_P, INPUT);
@@ -870,14 +1104,10 @@ void setup() {
   digitalWrite(Vol_P, HIGH);
   digitalWrite(Vol_M, HIGH);
   digitalWrite(Sw_bt, HIGH);
-  Serial.println("Config. HW... Ok");
 
-  Serial.println("Config. I2C");
   Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
   delay(50);
-  Serial.println("Config. I2C... Ok");
-
-  Serial.println("Check red LED");  
+    
   digitalWrite(PWR_Red, HIGH);
   digitalWrite(TX_Red, HIGH);
   digitalWrite(WiFi_Red, HIGH);
@@ -886,7 +1116,6 @@ void setup() {
 
   delay(1000);
 
-  Serial.println("Check green LED");  
   digitalWrite(PWR_Red, LOW);
   digitalWrite(TX_Red, LOW);
   digitalWrite(WiFi_Red, LOW);
@@ -901,7 +1130,6 @@ void setup() {
 
   delay(1000);
 
-  Serial.println("Check red + green LED");  
   digitalWrite(PWR_Red, HIGH);
   digitalWrite(TX_Red, HIGH);
   digitalWrite(WiFi_Red, HIGH);
@@ -909,8 +1137,6 @@ void setup() {
   digitalWrite(Tally2_Red, HIGH);
 
   delay(1000);
-
-  Serial.println("Check LED... Ok");
 
   digitalWrite(PWR_Red, HIGH);
   digitalWrite(TX_Red, LOW);
@@ -926,95 +1152,48 @@ void setup() {
 
   if(digitalRead(Sw_bt) == 0)
   {
-    Serial.println("Start in diagnoastic mode");
-    Serial.println("Starting WiFI AP");
     digitalWrite(WiFi_Red, HIGH);
     if (!WiFi.softAP("TellyConfig", "AdminConfigAP")) 
     {
       Serial.print("AP error");
       while(1);
     }
-    Serial.println("WiFi AP... Ok");
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(myIP);
     ConnectMode = 1;
+
+    App_server.on("/", handleRoot);
+    App_server.on("/Reload", handleRoot);
+    App_server.on("/Settings", Settings);
+    App_server.on("/GET", HTTP_GET,HTTP_qe);
+    App_server.begin();
 
     digitalWrite(WiFi_Red, LOW);
     digitalWrite(WiFi_Green, HIGH);
   }
   else
   {
-    Serial.println("Start in normal mode");
     if(RX_module == 1)
     {
-      Serial.println("Starting radio receiver");
       digitalWrite(TX_Green, HIGH);
       rx.setup();
       rx.setFrequency(fm_freq_Rx);
       rx.setVolume(Volume);
       rx.setMono(0);
-      Serial.println("Radio receiver... Ok");
-    }
-    else
-    {
-      Serial.println("Radio receiver disabled");
     }
   
     if(TX_module == 1)
     {
-      Serial.println("Starting radio transmitter");
       fmtx_init(fm_freq_Tx, EUROPE);
       delay(10);
       Eter_State(0);
-      Serial.println("Radio transmitter... Ok");
     } 
-    else
-    {Serial.println("Radio transmitter disabled");}
 
     if(WiFi_module == 1)
     {
-      Serial.println("Starting WiFi");
-      Serial.print("Connecting to ");
-      Serial.println(Access_point);
       digitalWrite(WiFi_Red, HIGH);
-      
-      WiFi.begin(Access_point, Key);
-      //WiFi.begin("StarNet - victor.m03", "485754434306BFAF");
-
-      while (WiFi.status() != WL_CONNECTED && WiFi_Connect_CNT < 50) 
-      {
-        digitalWrite(WiFi_Green, LOW);
-        digitalWrite(WiFi_Red, HIGH);
-        delay(250);
-        Serial.print(".");
-        digitalWrite(WiFi_Green, HIGH);
-        digitalWrite(WiFi_Red, LOW);
-        delay(250);
-        WiFi_Connect_CNT++;
-      }
-
-      Serial.println();
-      
-      if(WiFi_Connect_CNT < 50)
-      {
-        Serial.println("Starting WiFi... Ok");
-        Serial.println("IP address: ");
-        Serial.println(WiFi.localIP());
-        digitalWrite(WiFi_Green, HIGH);
-        digitalWrite(WiFi_Red, LOW);
-      }
-      else
-      { 
-        Serial.println("WiFi not connected!");
-        digitalWrite(WiFi_Green, LOW);
-        digitalWrite(WiFi_Red, HIGH); 
-      }
     }
-    else
-    {Serial.println("WiFi disabled");}
-    
-    Serial.println("System OK");
   }
 }
 
@@ -1022,7 +1201,8 @@ void loop() {
 
   if(ConnectMode == 1)
   {
-
+    App_server.handleClient();
+    delay(2);
   }
   else
   {
