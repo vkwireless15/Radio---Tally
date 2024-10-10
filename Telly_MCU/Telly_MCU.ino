@@ -32,23 +32,49 @@
 #include <KT0803L.h>
 #include <RDA5807_esp.h>
 #include <EEPROM.h>
+#include <WebSocketsClient.h>
+#include <SocketIOclient.h>
+#include <Arduino_JSON.h>
+#include <Preferences.h>
+
+SocketIOclient socket;
+RDA5807 rx; 
+Preferences Mem_Settings;
+
+JSONVar BusOptions;
+JSONVar Devices;
+JSONVar DeviceStates;
+
+String DeviceId = "empty";
+String listenerDeviceName = "RT";
+
+char tallyarbiter_host[18] = "192.168.100.7"; //IP address of the Tally Arbiter Server
+char tallyarbiter_port[6] = "4455";
+
+
+String actualType = "";
+String prevType = "";
+String actualColor = "";
+int actualPriority = 0;
+
+bool serverConnected = false;
 
 char RX_Message[64];
 char TX_Message[64];
 char i = 0;
 
-char FW_Version[] = {"TP_1.0.11.23 Tally - Phone"};
+String FW_Version = "TP_1.0.11.23 Tally - Phone";
 
 char Battery = 100;
 char Eter = 0;
-char WifiVersion[] = {"esp32_WiFi"};
+String WifiVersion = "esp32_WiFi";
 char Connection = Not_connected;
 
 String Access_point;
 String Key;
 
-char Transmitter[] = {"KT0803"};
-char Receiver[] = {"RDA5807"};
+String Transmitter = "KT0803";
+String Receiver = "RDA5807";
 
 char WorkMode = Master;
 char RX_module = 1;
@@ -56,111 +82,44 @@ char TX_module = 1;
 char WiFi_module = 0;
 char Tally = 1;
 char ButtonHold = 0;
+char DHCP = 0;
 
 byte Volume = 15;
 
-char Address = 255;
-char ID[] = {"AB"};
-
-RDA5807 rx; 
-
+String DevIP = "";
 unsigned int fm_freq_Tx = 10620;
 unsigned int fm_freq_Rx = 10620;
 int RSSI_val = 0;
 char ConnectMode = 0;
 
-float EEPROM_float_read(int addr)
-{   
-  byte x[4];
-  for(byte i = 0; i < 4; i++) x[i] = EEPROM.read(i+addr);
-  float *y = (float *)&x;
-  return y[0];
-}
-
-void EEPROM_float_write(int addr, float val)
-{ 
-  byte *x = (byte *)&val;
-  for(byte i = 0; i < 4; i++) EEPROM.write(i+addr, x[i]);
-  EEPROM.commit();
-}
-
-void EEPROM_Arr_read(char Arr[], int addr, int cnt)
-{
-  for(int i = 0; i<cnt; i++)
-  {
-    Arr[i] = EEPROM.read(addr + i);
-  }
-}
-
-void EEPROM_AP_read()
-{
-  
-}
-
-void EE_Erase_sector(int StartAddr,int StopAddr)
-{
-  for(int i = StartAddr; i<StopAddr; i++)
-  {
-    EEPROM.write(i ,0);
-  }
-  EEPROM.commit();
-}
-
-void EEPROM_Arr_write(char Arr[], int EE_addr, int St_addr, int Stp_addr, int cnt)
-{
-  char cnt_ = 0;
-  for(int i = St_addr; i<Stp_addr; i++)
-  {
-     EEPROM.write(EE_addr + cnt_ ,Arr[i]);
-     cnt_++;
-  }
-  EEPROM.commit();
-}
-
-void EEPROM_ERASE()
-{
-  for(int k = 0; k<1024; k++)
-  { EEPROM.write(k,0); }
-  EEPROM.commit();
-}
+//WebServer server(3333);
 
 void EEPROM_Read_Settings()
 {
-  Address = EEPROM.read(0);
-  ID[0] = EEPROM.read(1);
-  ID[1] = EEPROM.read(2);
+  String ServerIP;
+  String ServerPort;
   
-  fm_freq_Tx = EEPROM.read(3);
-  fm_freq_Tx = fm_freq_Tx << 8;
-  fm_freq_Tx = fm_freq_Tx | EEPROM.read(4);
-  fm_freq_Tx = fm_freq_Tx << 8;
-  fm_freq_Tx = fm_freq_Tx | EEPROM.read(5);
-  fm_freq_Tx = fm_freq_Tx << 8;
-  fm_freq_Tx = fm_freq_Tx | EEPROM.read(6);
-  
-  fm_freq_Rx = EEPROM.read(7);
-  fm_freq_Rx = fm_freq_Rx << 8;
-  fm_freq_Rx = fm_freq_Rx | EEPROM.read(8);
-  fm_freq_Rx = fm_freq_Rx << 8;
-  fm_freq_Rx = fm_freq_Rx | EEPROM.read(9);
-  fm_freq_Rx = fm_freq_Rx << 8;
-  fm_freq_Rx = fm_freq_Rx | EEPROM.read(10);
-  
-  WorkMode = EEPROM.read(11);
-  RX_module = EEPROM.read(12);
-  TX_module = EEPROM.read(13);
-  WiFi_module = EEPROM.read(14);
-  Tally = EEPROM.read(15);
+  Mem_Settings.begin(SettingsEEPROM, false);
 
-  EEPROM_Arr_read(WifiVersion, 16, 20);
-  EEPROM_Arr_read(Access_point, 36, 40);
-  EEPROM_Arr_read(Key, 76, 40);
+  WorkMode = getChar("DVM", 1)
+  RX_module = getChar("RXM", 0)
+  TX_module = getChar("TXM", 0)
+  Tally = getChar("TLM", 0)
+  ButtonHold = getChar("LBT", 0)
+  WiFi_module = getChar("WFM", 0)
+  fm_freq_Tx = getUInt("FHT", 9000);
+  fm_freq_Rx = getUInt("FHR", 9000);
+  Access_point = getString("WFA","AP");
+  Key = getString("WFK","12345678");
+  DHCP = getChar("DHC", 1)
+  ServerIP = getString("PRT","4455");
+  ServerPort = getString("SIP","192.168.4.2");
+  DevIP = getString("DIP","192.168.4.1");
+  DeviceId = getString("DID","empty");
+  listenerDeviceName = getString("DNM","empty");
 
-  EEPROM_AP_read();
-  EEPROM_KY_read();
-
-  ButtonHold = EEPROM.read(117);
-  //118 - free
+  //tallyarbiter_host = 
+  //tallyarbiter_port = 
 }
 
 void HAL_Delay(unsigned int n)
@@ -254,8 +213,7 @@ void COM_Port_Commands()
      HAL_Delay(10);
      if(RX_Message[0] == 'F' && RX_Message[1] == 'W')
      { 
-        //COM_Write(FW_Version,26);
-        Serial.print("TP_1.0.11.23 Tally - Phone"); 
+        Serial.print(FW_Version); 
      }
 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'R')
@@ -266,186 +224,63 @@ void COM_Port_Commands()
         digitalWrite(Tally1_Red, HIGH);
         digitalWrite(Tally2_Red, HIGH);
         HAL_Delay(100);
-        EEPROM_ERASE();
-        TX_Message[0] = 'F';
-        TX_Message[1] = 'R';
-        TX_Message[2] = '!';
-        COM_Write(TX_Message, 3);
+        
+        nvs_flash_erase(); 
+        nvs_flash_init();
+        
+        Serial.print("FR ok!"); 
         HAL_Delay(1500);
         digitalWrite(TX_Red, LOW);
         digitalWrite(WiFi_Red, LOW);
         digitalWrite(Tally1_Red, LOW);
         digitalWrite(Tally2_Red, LOW);
      }
-
-     if(RX_Message[0] == 'A' && RX_Message[1] == 'P')
-     { 
-        Serial.print("Access point:"); 
-        Serial.print(Access_point); 
-     }
-
-     if(RX_Message[0] == 'K' && RX_Message[1] == 'Y')
-     {  
-        Serial.print("Key:"); 
-        Serial.print(Key);
-     }
      
      if(RX_Message[0] == 'G' && RX_Message[1] == 'P')
      {
         HAL_Delay(100);
-        TX_Clear();
-        TX_Message[0] = 'D';
-        TX_Message[1] = 'V';
-        TX_Message[2] = 'M';
-        
-        if(WorkMode == 0)
-        { TX_Message[3] = '0'; }
-        
-        if(WorkMode == 1)
-        { TX_Message[3] = '1'; }
-        
-        COM_Write(TX_Message, 4);
+
+        Serial.println("DVM" + String(WorkMode));
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'D';
-        TX_Message[1] = 'V';
-        TX_Message[2] = 'B';
-        TX_Message[3] = Battery;
-        COM_Write(TX_Message, 4);
+        Serial.println("TLM" + String(Tally));
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'D';
-        TX_Message[1] = 'V';
-        TX_Message[2] = 'E';
-
-        if(Eter == 0)
-        { TX_Message[3] = '0'; }
-        
-        if(Eter == 1)
-        { TX_Message[3] = '1'; }
-        
-        COM_Write(TX_Message, 4);
+        Serial.println("LBT" + String(ButtonHold));
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'W';
-        TX_Message[1] = 'F';
-        TX_Message[2] = 'V';
-        COM_Write(TX_Message, 3);
-        //COM_Write(WifiVersion, CharCnt(WifiVersion));
-        Serial.print("ESP32_WiFi");
+        Serial.println("RXM" + String(RX_module));
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'W';
-        TX_Message[1] = 'F';
-        TX_Message[2] = 'C';
-
-        if(Connection == 0)
-        { TX_Message[3] = '0'; }
+        Serial.println("TXM" + String(TX_module));
+        HAL_Delay(100);
         
-        if(Connection == 1)
-        { TX_Message[3] = '1'; }
-        
-        COM_Write(TX_Message, 4);
+        Serial.println("FMT" + Transmitter);
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'W';
-        TX_Message[1] = 'F';
-        TX_Message[2] = 'A';
-        COM_Write(TX_Message, 3);
-        COM_Write(Access_point, CharCnt(Access_point));
+        Serial.println("FMR" + Receiver);
+        HAL_Delay(100);
+
+        Serial.println("FHT" + (float) fm_freq_Tx / 100);
+        HAL_Delay(100);
+
+        Serial.println("FHR" + (float) fm_freq_Rx / 100);
+        HAL_Delay(100);
+
+        Serial.println("WFM" + String(WiFi_module));
+        HAL_Delay(100);
+        
+        Serial.println("WFV" + WifiVersion);
+        HAL_Delay(100);
+
+        Serial.println("WFA" + Access_point);
         HAL_Delay(30);
 
-        TX_Clear();
-        TX_Message[0] = 'W';
-        TX_Message[1] = 'F';
-        TX_Message[2] = 'K';
-        COM_Write(TX_Message, 3);
-        COM_Write(Key, CharCnt(Key));
+        Serial.println("WFK" + Key);
         HAL_Delay(100);
 
-        TX_Clear();
-        TX_Message[0] = 'F';
-        TX_Message[1] = 'M';
-        TX_Message[2] = 'T';
-        COM_Write(TX_Message, 3);
-        COM_Write(Transmitter, CharCnt(Transmitter));
-        HAL_Delay(100);
-
-        TX_Clear();
-        TX_Message[0] = 'F';
-        TX_Message[1] = 'M';
-        TX_Message[2] = 'R';
-        COM_Write(TX_Message, 3);
-        COM_Write(Receiver, CharCnt(Receiver));
-        HAL_Delay(100);
-
-        TX_Clear();
-        TX_Message[0] = 'F';
-        TX_Message[1] = 'H';
-        TX_Message[2] = 'T';
-        COM_Write(TX_Message, 3);
-        Serial.print((float) fm_freq_Tx / 100);
-        HAL_Delay(100);
-
-        TX_Clear();
-        TX_Message[0] = 'F';
-        TX_Message[1] = 'H';
-        TX_Message[2] = 'R';
-        COM_Write(TX_Message, 3);
-        Serial.print((float) fm_freq_Rx / 100);
-        //COM_Write(Frequency_Rx, CharCnt(Frequency_Rx));
-        HAL_Delay(100);
-
-        TX_Clear();
-        TX_Message[0] = 'C';
-        TX_Message[1] = 'N';
-        TX_Message[2] = 'F';
         
-        TX_Message[7] = Address;
 
-        if(RX_module == 0)
-        { TX_Message[3] = '0'; }
-        
-        if(RX_module == 1)
-        { TX_Message[3] = '1'; }
-
-
-        if(TX_module == 0)
-        { TX_Message[4] = '0'; }
-        
-        if(TX_module == 1)
-        { TX_Message[4] = '1'; }
-
-
-        if(WiFi_module == 0)
-        { TX_Message[5] = '0'; }
-        
-        if(WiFi_module == 1)
-        { TX_Message[5] = '1'; }
-
-
-        if(Tally == 0)
-        { TX_Message[6] = '0'; }
-        
-        if(Tally == 1)
-        { TX_Message[6] = '1'; }
-        
-        TX_Message[8] = ID[0];
-        TX_Message[9] = ID[1];
-
-        if(ButtonHold == 0)
-        { TX_Message[10] = '0'; }
-        
-        if(ButtonHold == 1)
-        { TX_Message[10] = '1'; }
-        
-        COM_Write(TX_Message, 11);
-        HAL_Delay(100);
      }
 
      //Запись параметров
@@ -485,7 +320,7 @@ void COM_Port_Commands()
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'A')
      {
         char RxCnt = CharCnt(RX_Message);        
-        if(RxCnt > 3)
+        if(RxCnt > 3 && RxCnt - 3 < 40)
         {
            EE_Erase_sector(36, 36+40);
            EEPROM_Arr_write(RX_Message, 36, 3, RxCnt);
@@ -514,7 +349,7 @@ void COM_Port_Commands()
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'K')
      {
         char RxCnt = CharCnt(RX_Message);        
-        if(RxCnt > 3)
+        if(RxCnt > 3 && RxCnt - 3 < 40)
         {
            EE_Erase_sector(76, 76+40);
            EEPROM_Arr_write(RX_Message, 76, 3, RxCnt);
@@ -838,6 +673,196 @@ void CLR(char Arr[], int k)
   { Arr[i] = 0; }
 }
 
+
+void ws_emit(String event, const char *payload = NULL) {
+  if (payload) {
+    String msg = "[\"" + event + "\"," + payload + "]";
+    //Serial.println(msg);
+    socket.sendEVENT(msg);
+  } else {
+    String msg = "[\"" + event + "\"]";
+    //Serial.println(msg);
+    socket.sendEVENT(msg);
+  }
+}
+
+void socket_Connected(const char * payload, size_t length) {
+  //Serial.println("Connected to Tally Arbiter server.");
+  //Serial.println("DeviceId: " + DeviceId);
+  String deviceObj = "{\"deviceId\": \"" + DeviceId + "\", \"listenerType\": \"" + listenerDeviceName.c_str() + "\", \"canBeReassigned\": true, \"canBeFlashed\": true, \"supportsChat\": true }";
+  char charDeviceObj[1024];
+  strcpy(charDeviceObj, deviceObj.c_str());
+  ws_emit("listenerclient_connect", charDeviceObj);
+}
+
+void evaluateMode() {
+  if(actualType != prevType) 
+  {
+    if (actualType != "") 
+    {
+      
+    } 
+    else 
+    {
+      //Serial.println("No set!");
+    }
+    
+    if (actualType == "preview") 
+    {
+      //Serial.println("preview");
+    } 
+    else if (actualType == "program") 
+    {
+      //Serial.println("program");
+    }
+    else if (actualType == "aux") 
+    {
+      //Serial.println("aux");
+    } 
+    else 
+    {
+
+    }
+    
+    //Serial.println("Device is in " + actualType + " - priority " + String(actualPriority) + ")");
+    //Serial.println(actualType);
+
+    prevType = actualType;
+  }
+}
+
+void SetDeviceName() {
+  for (int i = 0; i < Devices.length(); i++) {
+    if (JSON.stringify(Devices[i]["id"]) == "\"" + DeviceId + "\"") {
+      String strDevice = JSON.stringify(Devices[i]["name"]);
+      DeviceName = strDevice.substring(1, strDevice.length() - 1);
+      break;
+    }
+  }
+  evaluateMode();
+}
+
+void socket_Reassign(String payload) {
+  String oldDeviceId = payload.substring(0, payload.indexOf(','));
+  String newDeviceId = payload.substring(oldDeviceId.length()+1);
+  newDeviceId = newDeviceId.substring(0, newDeviceId.indexOf(','));
+
+
+  String reassignObj = "{\"oldDeviceId\": \"" + oldDeviceId + "\", \"newDeviceId\": \"" + newDeviceId + "\"}";
+  char charReassignObj[1024];
+  strcpy(charReassignObj, reassignObj.c_str());
+  ws_emit("listener_reassign_object", charReassignObj);
+  ws_emit("devices");
+  
+  //Serial.println("newDeviceId: " + newDeviceId);
+  DeviceId = newDeviceId;
+  SetDeviceName();
+}
+
+void socket_Flash(){
+  
+}
+
+void showDeviceInfo() {
+  //displays the currently assigned device and tally data
+  evaluateMode();
+}
+
+String getBusTypeById(String busId) {
+  for (int i = 0; i < BusOptions.length(); i++) {
+    if (JSON.stringify(BusOptions[i]["id"]) == busId) {
+      return JSON.stringify(BusOptions[i]["type"]);
+    }
+  }
+
+  return "invalid";
+}
+
+String getBusColorById(String busId) {
+  for (int i = 0; i < BusOptions.length(); i++) {
+    if (JSON.stringify(BusOptions[i]["id"]) == busId) {
+      return JSON.stringify(BusOptions[i]["color"]);
+    }
+  }
+
+  return "invalid";
+}
+
+int getBusPriorityById(String busId) {
+  for (int i = 0; i < BusOptions.length(); i++) {
+    if (JSON.stringify(BusOptions[i]["id"]) == busId) {
+      return (int) JSON.stringify(BusOptions[i]["priority"]).toInt();
+    }
+  }
+
+  return 0;
+}
+
+void processTallyData() {
+  bool typeChanged = false;
+  for (int i = 0; i < DeviceStates.length(); i++) {
+    if (DeviceStates[i]["sources"].length() > 0) {
+      typeChanged = true;
+      actualType = getBusTypeById(JSON.stringify(DeviceStates[i]["busId"]));
+      actualColor = getBusColorById(JSON.stringify(DeviceStates[i]["busId"]));
+      actualPriority = getBusPriorityById(JSON.stringify(DeviceStates[i]["busId"]));
+    }
+  }
+  if(!typeChanged) {
+    actualType = "";
+    actualColor = "";
+    actualPriority = 0;
+  }
+  evaluateMode();
+}
+
+void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) { 
+
+    String msg = (char*)payload;
+    String type1 = msg.substring(2, msg.indexOf("\"",2));
+    String content = msg.substring(type1.length() + 4);
+    content.remove(content.length() - 1);
+    Serial.println("Got event '" + type1 + "', data: " + content);
+  
+  switch (type) {
+    case sIOtype_CONNECT:
+      socket_Connected((char*)payload, length);
+      break;
+
+    case sIOtype_DISCONNECT:
+    case sIOtype_ACK:
+    case sIOtype_ERROR:
+    case sIOtype_BINARY_EVENT:
+    case sIOtype_BINARY_ACK:
+      // Not handled
+      break;
+
+    case sIOtype_EVENT:     
+      if (type1 == "bus_options") BusOptions = JSON.parse(content);
+      if (type1 == "reassign") socket_Reassign(content);
+      if (type1 == "flash") socket_Flash();
+
+      if (type1 == "deviceId") {
+        DeviceId = content.substring(1, content.length()-1);
+        SetDeviceName();
+        showDeviceInfo();
+      }
+
+      if (type1 == "devices") {
+        Devices = JSON.parse(content);
+        SetDeviceName();
+      }
+
+      if (type1 == "device_states") {
+        DeviceStates = JSON.parse(content);
+        processTallyData();
+      }
+
+      break;
+  }
+}
+
+
 void setup() {
   char WiFi_Connect_CNT = 0;
   Serial.begin(115200);
@@ -1003,6 +1028,11 @@ void setup() {
         Serial.println(WiFi.localIP());
         digitalWrite(WiFi_Green, HIGH);
         digitalWrite(WiFi_Red, LOW);
+        
+        Serial.println("Connecting to Tally Arbiter host: " + String(tallyarbiter_host) + " Port:" + String(tallyarbiter_port));
+        socket.onEvent(socket_event);
+        socket.begin("192.168.100.7", atol("4455"));
+        
       }
       else
       { 
@@ -1026,6 +1056,7 @@ void loop() {
   }
   else
   {
+     socket.loop();
      COM_Port_Commands(); 
      if(digitalRead(Vol_P) == 0)
      {
