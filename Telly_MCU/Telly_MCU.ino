@@ -4,6 +4,9 @@
 #define TX 1
 #define Connected 1
 #define Not_connected 0
+#define Disabled 2
+#define Ok 1
+#define Error 0
 
 #define Sw_bt 36
 #define ADC_IN 39
@@ -24,6 +27,9 @@
 #define Tally2_Red 19
 #define Tally2_Green 18
 
+//#define Enabled 1
+//#define Not_Connected 0
+
 #define ESP32_I2C_SDA 21
 #define ESP32_I2C_SCL 22
 
@@ -36,6 +42,7 @@
 #include <SocketIOclient.h>
 #include <Arduino_JSON.h>
 #include <Preferences.h>
+#include <nvs_flash.h>
 
 SocketIOclient socket;
 RDA5807 rx; 
@@ -45,12 +52,15 @@ JSONVar BusOptions;
 JSONVar Devices;
 JSONVar DeviceStates;
 
-String DeviceId = "empty";
-String listenerDeviceName = "RT";
+String DeviceId = "";
+String listenerDeviceName = "";
 
-char tallyarbiter_host[18] = "192.168.100.7"; //IP address of the Tally Arbiter Server
-char tallyarbiter_port[6] = "4455";
+String ServerIP = "";
+String ServerPort = "";
 
+String DevIP = "";
+String GatewayIP = "";
+String SubnetIP = "";
 
 String actualType = "";
 String prevType = "";
@@ -61,7 +71,7 @@ bool serverConnected = false;
 
 char RX_Message[64];
 char TX_Message[64];
-char i = 0;
+char rx_count = 0;
 
 String FW_Version = "TP_1.0.11.23 Tally - Phone";
 
@@ -86,40 +96,42 @@ char DHCP = 0;
 
 byte Volume = 15;
 
-String DevIP = "";
-unsigned int fm_freq_Tx = 10620;
-unsigned int fm_freq_Rx = 10620;
+unsigned int fm_freq_Tx = 0;
+unsigned int fm_freq_Rx = 0;
 int RSSI_val = 0;
 char ConnectMode = 0;
+
+char Wifi_st = 0;
+//char Radio_st = 0;
+char Power_st = 0;
 
 //WebServer server(3333);
 
 void EEPROM_Read_Settings()
 {
-  String ServerIP;
-  String ServerPort;
-  
-  Mem_Settings.begin(SettingsEEPROM, false);
+  Mem_Settings.begin("SettingsEEPROM", false);
 
-  WorkMode = getChar("DVM", 1)
-  RX_module = getChar("RXM", 0)
-  TX_module = getChar("TXM", 0)
-  Tally = getChar("TLM", 0)
-  ButtonHold = getChar("LBT", 0)
-  WiFi_module = getChar("WFM", 0)
-  fm_freq_Tx = getUInt("FHT", 9000);
-  fm_freq_Rx = getUInt("FHR", 9000);
-  Access_point = getString("WFA","AP");
-  Key = getString("WFK","12345678");
-  DHCP = getChar("DHC", 1)
-  ServerIP = getString("PRT","4455");
-  ServerPort = getString("SIP","192.168.4.2");
-  DevIP = getString("DIP","192.168.4.1");
-  DeviceId = getString("DID","empty");
-  listenerDeviceName = getString("DNM","empty");
+  WorkMode = Mem_Settings.getChar("DVM", 1);
+  RX_module = Mem_Settings.getChar("RXM", 0);
+  TX_module = Mem_Settings.getChar("TXM", 0);
+  Tally = Mem_Settings.getChar("TLM", 0);
+  ButtonHold = Mem_Settings.getChar("LBT", 0);
+  WiFi_module = Mem_Settings.getChar("WFM", 0);
+  fm_freq_Tx = Mem_Settings.getUInt("FHT", 9000);
+  fm_freq_Rx = Mem_Settings.getUInt("FHR", 9000);
+  Access_point = Mem_Settings.getString("WFA","AP");
+  Key = Mem_Settings.getString("WFK","12345678");
+  DHCP = Mem_Settings.getChar("DHC", 1);
+  ServerPort = Mem_Settings.getString("PRT","4455");
+  ServerIP = Mem_Settings.getString("SIP","192.168.4.2");
+  DevIP = Mem_Settings.getString("DIP","192.168.4.1");
+  DeviceId = Mem_Settings.getString("DID","empty");
+  listenerDeviceName = Mem_Settings.getString("DNM","RT");
 
-  //tallyarbiter_host = 
-  //tallyarbiter_port = 
+  GatewayIP = Mem_Settings.getString("DGA","0.0.0.0");
+  SubnetIP = Mem_Settings.getString("DSA","255.255.255.0");
+
+  Mem_Settings.end();
 }
 
 void HAL_Delay(unsigned int n)
@@ -130,7 +142,7 @@ void HAL_Delay(unsigned int n)
 void RX_Clear()
 {
   char j = 0;
-  i = 0;
+  rx_count = 0;
   for(j=0;j<64;j++)
   {
     RX_Message[j] = 0;
@@ -155,10 +167,10 @@ char COM_Read()
   
   while (Serial.available() > 0)
   {
-    RX_Message[i] = Serial.read();
-    i++;
+    RX_Message[rx_count] = Serial.read();
+    rx_count++;
   }
-  if(i>0)
+  if(rx_count>0)
   { return 1;}
   return 0;
 }
@@ -210,6 +222,7 @@ void COM_Port_Commands()
 {
   if(COM_Read() == 1)
   { 
+     String AP;
      HAL_Delay(10);
      if(RX_Message[0] == 'F' && RX_Message[1] == 'W')
      { 
@@ -240,19 +253,19 @@ void COM_Port_Commands()
      {
         HAL_Delay(100);
 
-        Serial.println("DVM" + String(WorkMode));
+        Serial.println("DVM" + String((byte)WorkMode));
         HAL_Delay(100);
 
-        Serial.println("TLM" + String(Tally));
+        Serial.println("TLM"+ String((byte)Tally));
         HAL_Delay(100);
 
-        Serial.println("LBT" + String(ButtonHold));
+        Serial.println("LBT"+ String((byte)ButtonHold));
         HAL_Delay(100);
 
-        Serial.println("RXM" + String(RX_module));
+        Serial.println("RXM"+ String((byte)RX_module));
         HAL_Delay(100);
 
-        Serial.println("TXM" + String(TX_module));
+        Serial.println("TXM"+ String((byte)TX_module));
         HAL_Delay(100);
         
         Serial.println("FMT" + Transmitter);
@@ -261,13 +274,13 @@ void COM_Port_Commands()
         Serial.println("FMR" + Receiver);
         HAL_Delay(100);
 
-        Serial.println("FHT" + (float) fm_freq_Tx / 100);
+        Serial.println("FHT" + String((float) fm_freq_Tx / 100));
         HAL_Delay(100);
 
-        Serial.println("FHR" + (float) fm_freq_Rx / 100);
+        Serial.println("FHR" + String((float) fm_freq_Rx / 100));
         HAL_Delay(100);
 
-        Serial.println("WFM" + String(WiFi_module));
+        Serial.println("WFM"+ String((byte)WiFi_module));
         HAL_Delay(100);
         
         Serial.println("WFV" + WifiVersion);
@@ -279,387 +292,547 @@ void COM_Port_Commands()
         Serial.println("WFK" + Key);
         HAL_Delay(100);
 
-        
+        Serial.println("DHC"+ String((byte)DHCP));
+        HAL_Delay(100);
+
+        Serial.println("DIP" + DevIP);
+        HAL_Delay(100);
+
+        Serial.println("SIP" + ServerIP);
+        HAL_Delay(100);
+
+        Serial.println("PRT" + ServerPort);
+        HAL_Delay(100);
+
+        Serial.println("DID" + DeviceId);
+        HAL_Delay(100);
+
+        Serial.println("DNM" + listenerDeviceName);
+        HAL_Delay(100);
 
      }
 
      //Запись параметров
      if(RX_Message[0] == 'D' && RX_Message[1] == 'V' && RX_Message[2] == 'M')
      {
-        TX_Clear();
-
-        if(RX_Message[3] == '0' || RX_Message[3] == '1')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-           if(RX_Message[3] == '0')
-           { WorkMode = Master; EEPROM.write(11, 0); EEPROM.commit();}
-           else
-           { WorkMode = Slave; EEPROM.write(11, 1); EEPROM.commit();}
-           
-           TX_Message[0] = 'D';
-           TX_Message[1] = 'V';
-           TX_Message[2] = 'M';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'O';
-           TX_Message[5] = 'K';
-           COM_Write(TX_Message, 6);
-           HAL_Delay(100);
+          Serial.println("DVM" + String(WorkMode));
         }
         else
         {
-           TX_Message[0] = 'D';
-           TX_Message[1] = 'V';
-           TX_Message[2] = 'M';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
-           HAL_Delay(100);
+          if(RX_Message[3] == '0' || RX_Message[3] == '1')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("DVM", 0); }
+            else
+            { Mem_Settings.putChar("DVM", 1); }
+           
+            Mem_Settings.end();
+            Serial.println("DVM OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("DVM ER");
+            HAL_Delay(100);
+          }
         }
      }
 
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'A')
      {
-        char RxCnt = CharCnt(RX_Message);        
-        if(RxCnt > 3 && RxCnt - 3 < 40)
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
         {
-           EE_Erase_sector(36, 36+40);
-           EEPROM_Arr_write(RX_Message, 36, 3, RxCnt);
-           TX_Clear();
-           TX_Message[0] = 'W';
-           TX_Message[1] = 'F';
-           TX_Message[2] = 'A';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'O';
-           TX_Message[5] = 'K';
-           COM_Write(TX_Message, 6);
+          Serial.println("WFA" + Access_point);
         }
         else
-        {
-           TX_Clear();
-           TX_Message[0] = 'W';
-           TX_Message[1] = 'F';
-           TX_Message[2] = 'A';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
+        {       
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+            for(int i = 3; i<RxCnt; i++)
+            {
+              if(RX_Message[i] >= 0x20)
+              { AP+= RX_Message[i]; }
+            }
+            Mem_Settings.putString("WFA", AP);
+            Serial.println("WFA OK");
+            Mem_Settings.end();
+          }
+          else
+          {
+            Serial.println("WFA ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'K')
      {
-        char RxCnt = CharCnt(RX_Message);        
-        if(RxCnt > 3 && RxCnt - 3 < 40)
+        char RxCnt = CharCnt(RX_Message);  
+        if(RxCnt == 3)
         {
-           EE_Erase_sector(76, 76+40);
-           EEPROM_Arr_write(RX_Message, 76, 3, RxCnt);
-           TX_Clear();
-           TX_Message[0] = 'W';
-           TX_Message[1] = 'F';
-           TX_Message[2] = 'K';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'O';
-           TX_Message[5] = 'K';
-           COM_Write(TX_Message, 6);
+          Serial.println("WFK" + Key);
         }
         else
-        {
-           TX_Clear();
-           TX_Message[0] = 'W';
-           TX_Message[1] = 'F';
-           TX_Message[2] = 'K';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
+        {      
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+            for(int i = 3; i<RxCnt; i++)
+            {
+              if(RX_Message[i] >= 0x20)
+              { AP+= RX_Message[i]; }
+            }
+            Mem_Settings.putString("WFK", AP);
+            Serial.println("WFK OK");
+            Mem_Settings.end();
+          }
+          else
+          {
+            Serial.println("WFK ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'H' && RX_Message[2] == 'T')
      {
         unsigned int F = GetNumFromStr(RX_Message, 1);
-
-        if(F != 0)
+        char RxCnt = CharCnt(RX_Message);  
+        if(RxCnt == 3)
         {
-           fm_freq_Tx = F;
-           EEPROM.write(3, F >> 24 & 0xff);
-           EEPROM.write(4, F >> 16 & 0xff);
-           EEPROM.write(5, F >> 8 & 0xff);
-           EEPROM.write(6, F & 0xff);
-           EEPROM.commit();
-  
-           if(TX_module == 1)
-           {
-             fmtx_init(fm_freq_Tx, EUROPE);
-             delay(10);
-             Eter_State(0);
-           } 
-
-           TX_Clear();
-           TX_Message[0] = 'F';
-           TX_Message[1] = 'H';
-           TX_Message[2] = 'T';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'O';
-           TX_Message[5] = 'K';
-           COM_Write(TX_Message, 6);
+          Serial.println("FHT" + String(fm_freq_Tx));
         }
         else
         {
-           TX_Clear();
-           TX_Message[0] = 'F';
-           TX_Message[1] = 'H';
-           TX_Message[2] = 'T';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
-        }
+          if(F != 0)
+          {
+            fm_freq_Tx = F;
+            Mem_Settings.begin("SettingsEEPROM", false);
+            Mem_Settings.putUInt("FHT", fm_freq_Tx);
+            Mem_Settings.end();
+           
+            if(TX_module == 1)
+            {
+              fmtx_init(fm_freq_Tx, EUROPE);
+              delay(10);
+              Eter_State(0);
+            } 
+            Serial.println("FHT OK");
+           }
+           else
+           {
+            Serial.println("FHT ER");
+           }
+         }
      }
 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'H' && RX_Message[2] == 'R')
      {
         unsigned int F = GetNumFromStr(RX_Message, 1);
-        if(F != 0)
+        char RxCnt = CharCnt(RX_Message);  
+        if(RxCnt == 3)
         {
-           fm_freq_Rx = F;
-           EEPROM.write(7, (F >> 24) & 0xff);
-           EEPROM.write(8, (F >> 16) & 0xff);
-           EEPROM.write(9, (F >> 8) & 0xff);
-           EEPROM.write(10, F & 0xff);
-           EEPROM.commit();
-           if(RX_module == 1)
-           {
-              rx.setFrequency(fm_freq_Rx);
-           }           
-           TX_Clear();
-           TX_Message[0] = 'F';
-           TX_Message[1] = 'H';
-           TX_Message[2] = 'R';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'O';
-           TX_Message[5] = 'K';
-           COM_Write(TX_Message, 6);
+          Serial.println("FHR" + String(fm_freq_Rx));
         }
         else
         {
-           TX_Clear();
-           TX_Message[0] = 'F';
-           TX_Message[1] = 'H';
-           TX_Message[2] = 'R';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
+          if(F != 0)
+          {
+            fm_freq_Rx = F;
+            Mem_Settings.begin("SettingsEEPROM", false);
+            Mem_Settings.putUInt("FHR", fm_freq_Rx);
+            Mem_Settings.end();
+
+            if(RX_module == 1)
+            {
+              rx.setFrequency(fm_freq_Rx);
+            }           
+            Serial.println("FHR OK");
+          }
+          else
+          {
+            Serial.println("FHR ER");
+          }
         }
      }
      
-     if(RX_Message[0] == 'A' && RX_Message[1] == 'D' && RX_Message[2] == 'R')
-     {
-        unsigned int F = GetNumFromStr(RX_Message, 0);
-        if(F!=0)
-        {
-          Address = F;
-          EEPROM.write(0, Address);
-          EEPROM.commit();
-          TX_Message[0] = 'A';
-          TX_Message[1] = 'D';
-          TX_Message[2] = 'R';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
-        }
-        else
-        {
-           TX_Message[0] = 'A';
-           TX_Message[1] = 'D';
-           TX_Message[2] = 'R';
-           TX_Message[3] = ' ';
-           TX_Message[4] = 'E';
-           TX_Message[5] = 'R';
-           COM_Write(TX_Message, 6);
-        }
-     }
-
      if(RX_Message[0] == 'D' && RX_Message[1] == 'I' && RX_Message[2] == 'D')
      {
-        int k = CharCnt(RX_Message);
-        if(k == 5)
+        char RxCnt = CharCnt(RX_Message);    
+        if(RxCnt == 3)
         {
-          EEPROM.write(1, RX_Message[3]);
-          EEPROM.write(2, RX_Message[4]);
-          EEPROM.commit();
-          ID[0] = RX_Message[3];
-          ID[1] = RX_Message[4];
-          TX_Message[0] = 'D';
-          TX_Message[1] = 'I';
-          TX_Message[2] = 'D';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("DID" + DeviceId);
         }
         else
-        {
-          TX_Message[0] = 'D';
-          TX_Message[1] = 'I';
-          TX_Message[2] = 'D';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+        {     
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+            for(int i = 3; i<RxCnt; i++)
+            {
+              if(RX_Message[i] >= 0x20)
+              { AP+= RX_Message[i]; }
+            }
+            Mem_Settings.putString("DID", AP);
+            Serial.println("DID OK");
+            Mem_Settings.end();
+          }
+          else
+          {
+            Serial.println("DID ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'R' && RX_Message[1] == 'X' && RX_Message[2] == 'M')
      {
-        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-          if(RX_Message[3] == '1')
-          { EEPROM.write(12, 1); RX_module = 1;}
-          else
-          { EEPROM.write(12, 0); RX_module = 0;}
-          EEPROM.commit();
-          TX_Message[0] = 'R';
-          TX_Message[1] = 'X';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("RXM" + String(RX_module));
         }
         else
         {
-          TX_Message[0] = 'R';
-          TX_Message[1] = 'X';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+          if(RX_Message[3] == '1' || RX_Message[3] == '0')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+            if(RX_Message[3] == '1')
+            { Mem_Settings.putChar("RXM", 1); }
+            else
+            { Mem_Settings.putChar("RXM", 0); }
+          
+            Mem_Settings.end();
+            Serial.println("RXM OK");
+          }
+          else
+          {
+            Serial.println("RXM ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'T' && RX_Message[1] == 'X' && RX_Message[2] == 'M')
      {
-        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-          if(RX_Message[3] == '1')
-          { EEPROM.write(13, 1); TX_module = 1;}
-          else
-          { EEPROM.write(13, 0); TX_module = 0;}
-          EEPROM.commit();
-          TX_Message[0] = 'T';
-          TX_Message[1] = 'X';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("TXM" + String(TX_module));
         }
         else
         {
-          TX_Message[0] = 'T';
-          TX_Message[1] = 'X';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+          if(RX_Message[3] == '1' || RX_Message[3] == '0')
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+           
+             if(RX_Message[3] == '0')
+             { Mem_Settings.putChar("TXM", 0); }
+             else
+             { Mem_Settings.putChar("TXM", 1); }
+           
+             Mem_Settings.end();
+             Serial.println("TXM OK");
+             HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("TXM ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'T' && RX_Message[1] == 'L' && RX_Message[2] == 'M')
      {
-        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-          if(RX_Message[3] == '1')
-          { EEPROM.write(15, 1); Tally = 1;}
-          else
-          { EEPROM.write(15, 0); Tally = 0;}
-          EEPROM.commit();
-          TX_Message[0] = 'T';
-          TX_Message[1] = 'L';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("TLM" + String(Tally));
         }
         else
         {
-          TX_Message[0] = 'T';
-          TX_Message[1] = 'L';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+          if(RX_Message[3] == '1' || RX_Message[3] == '0')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("TLM", 0); }
+            else
+            { Mem_Settings.putChar("TLM", 1); }
+           
+            Mem_Settings.end();
+            Serial.println("TLM OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("TLM ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'M')
      {
-        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-          if(RX_Message[3] == '1')
-          { EEPROM.write(14, 1); }
-          else
-          { EEPROM.write(14, 0); }
-          EEPROM.commit();
-          TX_Message[0] = 'W';
-          TX_Message[1] = 'F';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("WFM" + String(WiFi_module));
         }
         else
         {
-          TX_Message[0] = 'W';
-          TX_Message[1] = 'F';
-          TX_Message[2] = 'M';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+          if(RX_Message[3] == '1' || RX_Message[3] == '0')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("WFM", 0); }
+            else
+            { Mem_Settings.putChar("WFM", 1); }
+           
+            Mem_Settings.end();
+            Serial.println("WFM OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("WFM ER");
+          }
         }
      }
 
      if(RX_Message[0] == 'L' && RX_Message[1] == 'B' && RX_Message[2] == 'T')
      {
-        if(RX_Message[3] == '1' || RX_Message[3] == '0')
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
         {
-          if(RX_Message[3] == '1')
-          { EEPROM.write(117, 1); ButtonHold = 1;}
-          else
-          { EEPROM.write(117, 0); ButtonHold = 0;}
-          EEPROM.commit();
-          TX_Message[0] = 'L';
-          TX_Message[1] = 'B';
-          TX_Message[2] = 'T';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'O';
-          TX_Message[5] = 'K';
-          COM_Write(TX_Message, 6);
+          Serial.println("LBT" + String(ButtonHold));
         }
         else
         {
-          TX_Message[0] = 'L';
-          TX_Message[1] = 'B';
-          TX_Message[2] = 'T';
-          TX_Message[3] = ' ';
-          TX_Message[4] = 'E';
-          TX_Message[5] = 'R';
-          COM_Write(TX_Message, 6);
+          if(RX_Message[3] == '1' || RX_Message[3] == '0')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("LBT", 0); }
+            else
+            { Mem_Settings.putChar("LBT", 1); }
+           
+            Mem_Settings.end();
+            Serial.println("LBT OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("LBT ER");
+          }
         }
      }
 
+     if(RX_Message[0] == 'D' && RX_Message[1] == 'H' && RX_Message[2] == 'C')
+     {
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
+        {
+          Serial.println("DHC" + String(DHCP));
+        }
+        else
+        {
+          if(RX_Message[3] == '0' || RX_Message[3] == '1')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("DHC", 0); }
+            else
+            { Mem_Settings.putChar("DHC", 1); }
+           
+            Mem_Settings.end();
+            Serial.println("DHC OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("DHC ER");
+            HAL_Delay(100);
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'S' && RX_Message[1] == 'I' && RX_Message[2] == 'P')
+     {
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
+        {
+          Serial.println("SIP" + ServerIP);
+        }
+        else
+        {        
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+             for(int i = 3; i<RxCnt; i++)
+             {
+               if(RX_Message[i] >= 0x20)
+               { AP+= RX_Message[i]; }
+             }
+             Mem_Settings.putString("SIP", AP);
+             Serial.println("SIP OK");
+             Mem_Settings.end();
+           }
+           else
+           {
+             Serial.println("SIP ER");
+           }
+        }
+     }
+
+     if(RX_Message[0] == 'D' && RX_Message[1] == 'I' && RX_Message[2] == 'P')
+     {
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
+        {
+          Serial.println("DIP" + DevIP);
+        }
+        else
+        {        
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+             for(int i = 3; i<RxCnt; i++)
+             {
+               if(RX_Message[i] >= 0x20)
+               { AP+= RX_Message[i]; }
+             }
+             Mem_Settings.putString("DIP", AP);
+             Serial.println("DIP OK");
+             Mem_Settings.end();
+          }
+          else
+          {
+             Serial.println("DIP ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'D' && RX_Message[1] == 'G' && RX_Message[2] == 'A')
+     {
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
+        {
+          Serial.println("DGA" + GatewayIP);
+        }
+        else
+        {         
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+             for(int i = 3; i<RxCnt; i++)
+             {
+                if(RX_Message[i] >= 0x20)
+                { AP+= RX_Message[i]; }
+             }
+             Mem_Settings.putString("DGA", AP);
+             Serial.println("DGA OK");
+             Mem_Settings.end();
+          }
+          else
+          {
+             Serial.println("DGA ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'D' && RX_Message[1] == 'S' && RX_Message[2] == 'A')
+     {
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
+        {
+          Serial.println("DSA" + SubnetIP);
+        }
+        else
+        {         
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+             for(int i = 3; i<RxCnt; i++)
+             {
+                if(RX_Message[i] >= 0x20)
+                { AP+= RX_Message[i]; }
+             }
+             Mem_Settings.putString("DSA", AP);
+             Serial.println("DSA OK");
+             Mem_Settings.end();
+          }
+          else
+          {
+             Serial.println("DSA ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'P' && RX_Message[1] == 'R' && RX_Message[2] == 'T')
+     {
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
+        {
+          Serial.println("PRT" + ServerPort);
+        }
+        else
+        {         
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+             Mem_Settings.begin("SettingsEEPROM", false);
+             for(int i = 3; i<RxCnt; i++)
+             {
+               if(RX_Message[i] >= 0x20)
+               { AP+= RX_Message[i]; }
+             }
+             Mem_Settings.putString("PRT", AP);
+             Serial.println("PRT OK");
+             Mem_Settings.end();
+          }
+          else
+          {
+             Serial.println("PRT ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'D' && RX_Message[1] == 'N' && RX_Message[2] == 'M')
+     {
+        char RxCnt = CharCnt(RX_Message); 
+        if(RxCnt == 3)
+        {
+          Serial.println("DNM" + listenerDeviceName);
+        }
+        else
+        {         
+          if(RxCnt > 3 && RxCnt - 3 < 40)
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+            for(int i = 3; i<RxCnt; i++)
+            {
+              if(RX_Message[i] >= 0x20)
+              { AP+= RX_Message[i]; }
+            }
+            Mem_Settings.putString("DNM", AP);
+            Serial.println("DNM OK");
+            Mem_Settings.end();
+          }
+          else
+          {
+            Serial.println("DNM ER");
+          }
+        }
+     }
+     
      if(RX_Message[0] == 'R' && RX_Message[1] == 'B' && RX_Message[2] == 'T')
      {
-        Serial.print("Reboot...");
+        Serial.println("Reboot...");
         ESP.restart();
      }
      
@@ -669,7 +842,7 @@ void COM_Port_Commands()
 
 void CLR(char Arr[], int k)
 {
-  for(i = 0; i<k; i++)
+  for(char i = 0; i<k; i++)
   { Arr[i] = 0; }
 }
 
@@ -705,33 +878,35 @@ void evaluateMode() {
     else 
     {
       //Serial.println("No set!");
+      digitalWrite(Tally1_Red, LOW);
+      digitalWrite(Tally2_Red, LOW);
+      digitalWrite(Tally1_Green, LOW);
+      digitalWrite(Tally2_Green, LOW);
     }
     
-    if (actualType == "preview") 
+    if (actualType == "\"preview\"") 
     {
       //Serial.println("preview");
+      digitalWrite(Tally1_Green, HIGH);
+      digitalWrite(Tally2_Green, HIGH);
+      digitalWrite(Tally1_Red, LOW);
+      digitalWrite(Tally2_Red, LOW);
     } 
-    else if (actualType == "program") 
+    if (actualType == "\"program\"") 
     {
       //Serial.println("program");
-    }
-    else if (actualType == "aux") 
-    {
-      //Serial.println("aux");
-    } 
-    else 
-    {
-
+      digitalWrite(Tally1_Red, HIGH);
+      digitalWrite(Tally2_Red, HIGH);
+      digitalWrite(Tally1_Green, LOW);
+      digitalWrite(Tally2_Green, LOW);
     }
     
-    //Serial.println("Device is in " + actualType + " - priority " + String(actualPriority) + ")");
-    //Serial.println(actualType);
-
     prevType = actualType;
   }
 }
 
 void SetDeviceName() {
+  String DeviceName;
   for (int i = 0; i < Devices.length(); i++) {
     if (JSON.stringify(Devices[i]["id"]) == "\"" + DeviceId + "\"") {
       String strDevice = JSON.stringify(Devices[i]["name"]);
@@ -753,14 +928,33 @@ void socket_Reassign(String payload) {
   strcpy(charReassignObj, reassignObj.c_str());
   ws_emit("listener_reassign_object", charReassignObj);
   ws_emit("devices");
-  
+
   //Serial.println("newDeviceId: " + newDeviceId);
+  
+  newDeviceId.remove(0,1);
+  newDeviceId.remove(newDeviceId.length()-1, 1);
+  //Serial.println("newDeviceId: " + newDeviceId);
+
   DeviceId = newDeviceId;
   SetDeviceName();
+  
+  Mem_Settings.begin("SettingsEEPROM", false);
+  Mem_Settings.putString("DID", newDeviceId);
+  Mem_Settings.end();
+  
 }
 
-void socket_Flash(){
-  
+void socket_Flash()
+{
+  digitalWrite(Tally1_Green, HIGH);
+  digitalWrite(Tally2_Green, HIGH);
+  digitalWrite(Tally1_Red, LOW);
+  digitalWrite(Tally2_Red, LOW);
+  HAL_Delay(1000);
+  digitalWrite(Tally1_Green, LOW);
+  digitalWrite(Tally2_Green, LOW);
+  digitalWrite(Tally1_Red, LOW);
+  digitalWrite(Tally2_Red, LOW);
 }
 
 void showDeviceInfo() {
@@ -822,7 +1016,7 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
     String type1 = msg.substring(2, msg.indexOf("\"",2));
     String content = msg.substring(type1.length() + 4);
     content.remove(content.length() - 1);
-    Serial.println("Got event '" + type1 + "', data: " + content);
+    
   
   switch (type) {
     case sIOtype_CONNECT:
@@ -855,6 +1049,7 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
 
       if (type1 == "device_states") {
         DeviceStates = JSON.parse(content);
+        //Serial.println("Got event '" + type1 + "', data: " + content);
         processTallyData();
       }
 
@@ -862,9 +1057,232 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
   }
 }
 
+void GetOctIP(String IP_a, int &oct1, int &oct2, int &oct3, int &oct4)
+{
+  char IP_char[20];
+  char oct_cnt = 0;
+  String oct = "";
+  IP_a.toCharArray(IP_char, IP_a.length()+1);
+
+  //Serial.print(String(IP_a.length()) + " ");
+
+  for(int i = 0; i<IP_a.length(); i++)
+  {
+    if(IP_char[i] != '.')
+    {
+      oct += IP_char[i];
+      
+    }
+    else
+    {
+      //Serial.print(oct + " ");
+      
+      if(oct_cnt == 0)
+      {oct1 = oct.toInt();}
+      
+      if(oct_cnt == 1)
+      {oct2 = oct.toInt();}
+      
+      if(oct_cnt == 2)
+      {oct3 = oct.toInt();}
+      
+      oct="";
+      oct_cnt++;
+    }
+  }
+  oct4 = oct.toInt(); 
+  //Serial.print(oct + " "); 
+}
+
+void St_Leds()
+{
+  static int Timer_cnt;
+
+  if(Timer_cnt <= 3)
+  {
+    if(Wifi_st == Not_connected)
+    { 
+      digitalWrite(WiFi_Red, HIGH); 
+    }
+    
+    if(Wifi_st == Connected)
+    { 
+      digitalWrite(WiFi_Green, HIGH); 
+    }
+    
+    if(Wifi_st == Disabled)
+    { 
+      digitalWrite(WiFi_Red,LOW); 
+      digitalWrite(WiFi_Green,LOW); 
+    }
+
+    if(Power_st == Ok)
+    { 
+      digitalWrite(PWR_Red, LOW); 
+      digitalWrite(PWR_Green, HIGH); 
+    }
+
+    if(Power_st == Error)
+    { 
+      digitalWrite(PWR_Red, HIGH); 
+      digitalWrite(PWR_Green, LOW);
+    }
+  }
+  else
+  {
+    digitalWrite(PWR_Red,LOW);
+    digitalWrite(PWR_Green,LOW);
+
+    digitalWrite(WiFi_Red,LOW);
+    digitalWrite(WiFi_Green,LOW);
+  }
+
+  Timer_cnt++;
+  
+  if(Timer_cnt > 100)
+  Timer_cnt = 0;
+}
+
+void Main_Process()
+{
+  if(digitalRead(Vol_P) == 0)
+     {
+       Volume++;
+       if(Volume > 15)
+       Volume = 15;
+       // if(RX_module == 1)
+       // { rx.setVolume(Volume); 
+       // delay(100);
+     }  
+   
+     if(digitalRead(Vol_M) == 0)
+     {
+       if(Volume > 0)
+       Volume--;
+       // if(RX_module == 1)
+       // { rx.setVolume(Volume); 
+       // delay(100);
+     }
+
+     if(RX_module == 1)
+     {
+       RSSI_val = rx.getRssi();
+       if(RSSI_val > 50)
+       { 
+          rx.setMute(false);
+          digitalWrite(TX_Green, HIGH); 
+       }
+       else
+       { 
+          rx.setMute(true); 
+          digitalWrite(TX_Green, LOW);
+       }
+    
+       delay(20);
+     }
+     
+  
+     if(WorkMode == Master)
+     {
+        if(fm_freq_Tx != fm_freq_Rx)
+        {
+           if(digitalRead(Sw_bt) == 0)
+           {
+              if(Eter == 0)
+              {
+                if(Get_Eter_State() == 0)
+                {
+                  digitalWrite(TX_Red, HIGH);
+                  Eter_State(1);
+                }
+                else
+                {
+                  digitalWrite(TX_Red, LOW);
+                  Eter_State(0);
+                }
+                Eter = 1;
+              }
+           }
+           else
+           {
+              if(Eter == 1)
+              {
+                Eter = 0;
+              }
+           }
+        }
+        else
+        {
+           if(digitalRead(Sw_bt) == 0)
+           {
+              if(Eter == 0 && ButtonHold != 1)
+              {
+                digitalWrite(TX_Red, HIGH);
+                Eter_State(1);
+                Eter = 1;
+              }
+
+              if(Eter == 0 && ButtonHold == 1)
+              {
+                if(Get_Eter_State() == 0)
+                {
+                  digitalWrite(TX_Red, HIGH);
+                  Eter_State(1);
+                }
+                else
+                {
+                  digitalWrite(TX_Red, LOW);
+                  Eter_State(0);
+                }
+
+                Eter = 1;
+              }
+           }
+           else
+           {
+              if(Eter == 1 && ButtonHold != 1)
+              {
+                digitalWrite(TX_Red, LOW);
+                Eter_State(0);
+                Eter = 0;
+              }
+
+              if(Eter == 1 && ButtonHold == 1)
+              {
+                Eter = 0;
+              }
+           }
+        }
+     }
+     else
+     {
+        if(digitalRead(Sw_bt) == 0)
+        {
+           if(Eter == 0)
+           {
+             digitalWrite(TX_Red, HIGH);
+             Eter_State(1);
+             Eter = 1;
+           }
+        }
+        else
+        {
+          if(Eter == 1)
+          {
+            digitalWrite(TX_Red, LOW);
+            Eter_State(0);
+            Eter = 0;
+          }
+        }
+     }
+}
 
 void setup() {
   char WiFi_Connect_CNT = 0;
+  char ServIP[20];
+  char ServPort[10];
+  int Oct1, Oct2, Oct3, Oct4;
+  
   Serial.begin(115200);
   EEPROM.begin(1024);
   Serial.println("Starting system...");
@@ -1003,6 +1421,7 @@ void setup() {
       Serial.print("Connecting to ");
       Serial.println(Access_point);
       digitalWrite(WiFi_Red, HIGH);
+      Wifi_st = Not_connected;
       
       WiFi.begin(Access_point, Key);
       //WiFi.begin("StarNet - victor.m03", "485754434306BFAF");
@@ -1020,19 +1439,38 @@ void setup() {
       }
 
       Serial.println();
-      
+     
       if(WiFi_Connect_CNT < 50)
       {
         Serial.println("Starting WiFi... Ok");
         Serial.println("IP address: ");
-        Serial.println(WiFi.localIP());
+        if(DHCP == 0)
+        {
+          GetOctIP(DevIP, Oct1, Oct2, Oct3, Oct4);
+          IPAddress local_IP(Oct1, Oct2, Oct3, Oct4);
+
+          GetOctIP(GatewayIP, Oct1, Oct2, Oct3, Oct4);
+          IPAddress gateway(Oct1, Oct2, Oct3, Oct4);
+
+          GetOctIP(SubnetIP, Oct1, Oct2, Oct3, Oct4);
+          IPAddress subnet(Oct1, Oct2, Oct3, Oct4);
+        }
+        else
+        {
+          DevIP = (String)WiFi.localIP();
+          Serial.println(DevIP);
+        }
+        
         digitalWrite(WiFi_Green, HIGH);
         digitalWrite(WiFi_Red, LOW);
+
+        ServerIP.toCharArray(ServIP, ServerIP.length()+1);
+        ServerPort.toCharArray(ServPort, ServerPort.length()+1);
         
-        Serial.println("Connecting to Tally Arbiter host: " + String(tallyarbiter_host) + " Port:" + String(tallyarbiter_port));
+        Serial.println("Connecting to Tally Arbiter host: " + String(ServIP) + " Port:" + String(ServPort));
         socket.onEvent(socket_event);
-        socket.begin("192.168.100.7", atol("4455"));
-        
+        socket.begin(ServIP, atol(ServPort));
+        Wifi_st = Connected;
       }
       else
       { 
@@ -1042,9 +1480,12 @@ void setup() {
       }
     }
     else
-    {Serial.println("WiFi disabled");}
+    {Serial.println("WiFi disabled"); Wifi_st = Disabled;}
     
     Serial.println("System OK");
+    digitalWrite(PWR_Red, LOW);
+    digitalWrite(PWR_Green, HIGH);
+    Power_st = Ok;
   }
 }
 
@@ -1057,136 +1498,8 @@ void loop() {
   else
   {
      socket.loop();
-     COM_Port_Commands(); 
-     if(digitalRead(Vol_P) == 0)
-     {
-       Volume++;
-       if(Volume > 15)
-       Volume = 15;
-       // if(RX_module == 1)
-       // { rx.setVolume(Volume); 
-       // delay(100);
-     }  
-   
-     if(digitalRead(Vol_M) == 0)
-     {
-       if(Volume > 0)
-       Volume--;
-       // if(RX_module == 1)
-       // { rx.setVolume(Volume); 
-       // delay(100);
-     }
-
-     if(RX_module == 1)
-     {
-       RSSI_val = rx.getRssi();
-       if(RSSI_val > 50)
-       { 
-          rx.setMute(false);
-          digitalWrite(TX_Green, HIGH); 
-       }
-       else
-       { 
-          rx.setMute(true); 
-          digitalWrite(TX_Green, LOW);
-       }
-    
-       delay(20);
-     }
-     
-  
-     if(WorkMode == Master)
-     {
-        if(fm_freq_Tx != fm_freq_Rx)
-        {
-           if(digitalRead(Sw_bt) == 0)
-           {
-              if(Eter == 0)
-              {
-                if(Get_Eter_State() == 0)
-                {
-                  digitalWrite(TX_Red, HIGH);
-                  Eter_State(1);
-                }
-                else
-                {
-                  digitalWrite(TX_Red, LOW);
-                  Eter_State(0);
-                }
-                Eter = 1;
-              }
-           }
-           else
-           {
-              if(Eter == 1)
-              {
-                Eter = 0;
-              }
-           }
-        }
-        else
-        {
-           if(digitalRead(Sw_bt) == 0)
-           {
-              if(Eter == 0 && ButtonHold != 1)
-              {
-                digitalWrite(TX_Red, HIGH);
-                Eter_State(1);
-                Eter = 1;
-              }
-
-              if(Eter == 0 && ButtonHold == 1)
-              {
-                if(Get_Eter_State() == 0)
-                {
-                  digitalWrite(TX_Red, HIGH);
-                  Eter_State(1);
-                }
-                else
-                {
-                  digitalWrite(TX_Red, LOW);
-                  Eter_State(0);
-                }
-
-                Eter = 1;
-              }
-           }
-           else
-           {
-              if(Eter == 1 && ButtonHold != 1)
-              {
-                digitalWrite(TX_Red, LOW);
-                Eter_State(0);
-                Eter = 0;
-              }
-
-              if(Eter == 1 && ButtonHold == 1)
-              {
-                Eter = 0;
-              }
-           }
-        }
-     }
-     else
-     {
-        if(digitalRead(Sw_bt) == 0)
-        {
-           if(Eter == 0)
-           {
-             digitalWrite(TX_Red, HIGH);
-             Eter_State(1);
-             Eter = 1;
-           }
-        }
-        else
-        {
-          if(Eter == 1)
-          {
-            digitalWrite(TX_Red, LOW);
-            Eter_State(0);
-            Eter = 0;
-          }
-        }
-     }
+     St_Leds();
+     COM_Port_Commands();
+     Main_Process();
   }
 }
