@@ -93,6 +93,10 @@ char WiFi_module = 0;
 char Tally = 1;
 char ButtonHold = 0;
 char DHCP = 0;
+int RSSI_Tr = 0;
+char RSSI_Tr_act = 0;
+char RadioRxIsAct = 0;
+char HoldFlag = 0;
 
 byte Volume = 15;
 
@@ -127,6 +131,8 @@ void EEPROM_Read_Settings()
   DevIP = Mem_Settings.getString("DIP","192.168.4.1");
   DeviceId = Mem_Settings.getString("DID","empty");
   listenerDeviceName = Mem_Settings.getString("DNM","RT");
+  RSSI_Tr = Mem_Settings.getUInt("SSA",20);
+  RSSI_Tr_act = Mem_Settings.getChar("RTE",1);
 
   GatewayIP = Mem_Settings.getString("DGA","0.0.0.0");
   SubnetIP = Mem_Settings.getString("DSA","255.255.255.0");
@@ -206,12 +212,17 @@ unsigned int GetNumFromStr(char Arr[], byte k)
 
   if(k == 1)
   {
-     if(rez >= 5000 && rez <= 11500)
+     if(rez >= 8750 && rez <= 10800)
      { return rez; }
   }
-  else
+  if(k == 0)
   {
     if(rez >= 0 && rez <= 255)
+     { return rez; }
+  }
+  if(k == 2)
+  {
+    if(rez >= 1 && rez <= 255)
      { return rez; }
   }
 
@@ -226,7 +237,23 @@ void COM_Port_Commands()
      HAL_Delay(10);
      if(RX_Message[0] == 'F' && RX_Message[1] == 'W')
      { 
-        Serial.print(FW_Version); 
+         Serial.println(FW_Version); 
+     }
+
+     if(RX_Message[0] == 'S' && RX_Message[1] == 'R')
+     { 
+       for(unsigned int k = 8750; k <= 10800; k+= 10)
+       {
+         rx.setFrequency(k);
+         HAL_Delay(500);
+         RSSI_val = rx.getRssi();
+         Serial.print(String((float) k / 100));
+         Serial.print(" ");
+         Serial.println(RSSI_val);
+       }
+        HAL_Delay(500);
+        rx.setFrequency(fm_freq_Tx);
+        Serial.println("SR OK");
      }
 
      if(RX_Message[0] == 'F' && RX_Message[1] == 'R')
@@ -247,6 +274,12 @@ void COM_Port_Commands()
         digitalWrite(WiFi_Red, LOW);
         digitalWrite(Tally1_Red, LOW);
         digitalWrite(Tally2_Red, LOW);
+     }
+
+     if(RX_Message[0] == 'G' && RX_Message[1] == 'R')
+     {
+       RSSI_val = rx.getRssi();
+       Serial.print("RSSI: "); Serial.println(RSSI_val); 
      }
      
      if(RX_Message[0] == 'G' && RX_Message[1] == 'P')
@@ -457,6 +490,61 @@ void COM_Port_Commands()
           else
           {
             Serial.println("FHR ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'S' && RX_Message[1] == 'S' && RX_Message[2] == 'A')
+     {
+        unsigned int F = GetNumFromStr(RX_Message, 2);
+        char RxCnt = CharCnt(RX_Message);  
+        if(RxCnt == 3)
+        {
+          Serial.println("SSA" + String(RSSI_val));
+        }
+        else
+        {
+          if(F != 0)
+          {
+            RSSI_Tr = F;
+            Mem_Settings.begin("SettingsEEPROM", false);
+            Mem_Settings.putUInt("SSA", F);
+            Mem_Settings.end();          
+            Serial.println("SSA OK");
+          }
+          else
+          {
+            Serial.println("SSA ER");
+          }
+        }
+     }
+
+     if(RX_Message[0] == 'R' && RX_Message[1] == 'T' && RX_Message[2] == 'E')
+     {
+        char RxCnt = CharCnt(RX_Message);
+        if(RxCnt == 3)
+        {
+          Serial.println("RTE" + String(RSSI_Tr_act));
+        }
+        else
+        {
+          if(RX_Message[3] == '0' || RX_Message[3] == '1')
+          {
+            Mem_Settings.begin("SettingsEEPROM", false);
+           
+            if(RX_Message[3] == '0')
+            { Mem_Settings.putChar("RTE", 0); RSSI_Tr_act = 0; }
+            else
+            { Mem_Settings.putChar("RTE", 1); RSSI_Tr_act = 1; }
+           
+            Mem_Settings.end();
+            Serial.println("RTE OK");
+            HAL_Delay(100);
+          }
+          else
+          {
+            Serial.println("RTE ER");
+            HAL_Delay(100);
           }
         }
      }
@@ -1166,19 +1254,31 @@ void Main_Process()
 
      if(RX_module == 1)
      {
-       RSSI_val = rx.getRssi();
-       if(RSSI_val > 50)
-       { 
-          rx.setMute(false);
-          digitalWrite(TX_Green, HIGH); 
+       if(RSSI_Tr_act == 1)
+       {
+         RSSI_val = rx.getRssi();
+         if(RSSI_val > RSSI_Tr && Eter == 0 && HoldFlag == 0)
+         {  
+           rx.setMute(false);
+           digitalWrite(TX_Green, HIGH); 
+         }
+         else
+         { 
+           rx.setMute(true); 
+           digitalWrite(TX_Green, LOW);
+         }
+         delay(20);
        }
        else
-       { 
-          rx.setMute(true); 
-          digitalWrite(TX_Green, LOW);
+       {
+         if(RadioRxIsAct == 0)
+         {
+           rx.setMute(false);
+           digitalWrite(TX_Green, HIGH);
+           RadioRxIsAct = 1;
+         }
+         delay(20);
        }
-    
-       delay(20);
      }
      
   
@@ -1217,6 +1317,9 @@ void Main_Process()
            {
               if(Eter == 0 && ButtonHold != 1)
               {
+                rx.setMute(true); 
+                digitalWrite(TX_Green, LOW);
+                
                 digitalWrite(TX_Red, HIGH);
                 Eter_State(1);
                 Eter = 1;
@@ -1228,11 +1331,20 @@ void Main_Process()
                 {
                   digitalWrite(TX_Red, HIGH);
                   Eter_State(1);
+
+                  rx.setMute(true); 
+                  digitalWrite(TX_Green, LOW);
                 }
                 else
                 {
                   digitalWrite(TX_Red, LOW);
                   Eter_State(0);
+                  if(RSSI_Tr_act == 0)
+                  {
+                    rx.setMute(false); 
+                    digitalWrite(TX_Green, HIGH);
+                    HoldFlag = 0;
+                  }
                 }
 
                 Eter = 1;
@@ -1242,6 +1354,12 @@ void Main_Process()
            {
               if(Eter == 1 && ButtonHold != 1)
               {
+                if(RSSI_Tr_act == 0)
+                {
+                  rx.setMute(false); 
+                  digitalWrite(TX_Green, HIGH);
+                }
+            
                 digitalWrite(TX_Red, LOW);
                 Eter_State(0);
                 Eter = 0;
@@ -1249,6 +1367,7 @@ void Main_Process()
 
               if(Eter == 1 && ButtonHold == 1)
               {
+                HoldFlag = 1;
                 Eter = 0;
               }
            }
@@ -1260,15 +1379,31 @@ void Main_Process()
         {
            if(Eter == 0)
            {
-             digitalWrite(TX_Red, HIGH);
-             Eter_State(1);
-             Eter = 1;
+             if(fm_freq_Tx != fm_freq_Rx)
+             {
+               digitalWrite(TX_Red, HIGH);
+               Eter_State(1);
+               Eter = 1;
+             }
+             else
+             {
+               rx.setMute(true); 
+               digitalWrite(TX_Green, LOW);
+               digitalWrite(TX_Red, HIGH);
+               Eter_State(1);
+               Eter = 1;
+             }
            }
         }
         else
         {
           if(Eter == 1)
           {
+            if(RSSI_Tr_act == 0)
+            {
+               rx.setMute(false); 
+               digitalWrite(TX_Green, HIGH);
+            }
             digitalWrite(TX_Red, LOW);
             Eter_State(0);
             Eter = 0;
