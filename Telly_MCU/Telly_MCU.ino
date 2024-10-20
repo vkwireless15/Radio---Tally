@@ -78,7 +78,6 @@ String FW_Version = "TP_1.0.11.23 Tally - Phone";
 char Battery = 100;
 char Eter = 0;
 String WifiVersion = "esp32_WiFi";
-char Connection = Not_connected;
 
 String Access_point;
 String Key;
@@ -99,14 +98,14 @@ char RadioRxIsAct = 0;
 char HoldFlag = 0;
 
 byte Volume = 15;
+byte Mem_Volume = 15;
 
 unsigned int fm_freq_Tx = 0;
 unsigned int fm_freq_Rx = 0;
 int RSSI_val = 0;
 char ConnectMode = 0;
 
-char Wifi_st = 0;
-//char Radio_st = 0;
+char Wifi_st = Disabled;
 char Power_st = 0;
 
 //WebServer server(3333);
@@ -133,6 +132,7 @@ void EEPROM_Read_Settings()
   listenerDeviceName = Mem_Settings.getString("DNM","RT");
   RSSI_Tr = Mem_Settings.getUInt("SSA",20);
   RSSI_Tr_act = Mem_Settings.getChar("RTE",1);
+  Volume = Mem_Settings.getUInt("VOL",20);
 
   GatewayIP = Mem_Settings.getString("DGA","0.0.0.0");
   SubnetIP = Mem_Settings.getString("DSA","255.255.255.0");
@@ -346,6 +346,32 @@ void COM_Port_Commands()
      }
 
      //Запись параметров
+     if(RX_Message[0] == 'V' && RX_Message[1] == 'O' && RX_Message[2] == 'L')
+     {
+        unsigned int F = GetNumFromStr(RX_Message, 0);
+        char RxCnt = CharCnt(RX_Message);  
+        if(RxCnt == 3)
+        {
+          Serial.println("VOL" + String(Volume));
+        }
+        else
+        {
+          if(F < 16)
+          {
+            Volume = F;
+            Mem_Settings.begin("SettingsEEPROM", false);
+            Mem_Settings.putUInt("VOL", Volume);
+            Mem_Settings.end();
+          
+            Serial.println("VOL OK");
+           }
+           else
+           {
+            Serial.println("VOL ER");
+           }
+         }
+     }
+     
      if(RX_Message[0] == 'D' && RX_Message[1] == 'V' && RX_Message[2] == 'M')
      {
         char RxCnt = CharCnt(RX_Message);
@@ -1109,6 +1135,7 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
   switch (type) {
     case sIOtype_CONNECT:
       socket_Connected((char*)payload, length);
+      Wifi_st = Connected;
       break;
 
     case sIOtype_DISCONNECT:
@@ -1238,22 +1265,34 @@ void Main_Process()
        Volume++;
        if(Volume > 15)
        Volume = 15;
-       // if(RX_module == 1)
-       // { rx.setVolume(Volume); 
-       // delay(100);
+
+       Mem_Settings.begin("SettingsEEPROM", false);
+       Mem_Settings.putUInt("VOL", Volume);
+       Mem_Settings.end();
+       
+       delay(100);
      }  
    
      if(digitalRead(Vol_M) == 0)
      {
        if(Volume > 0)
        Volume--;
-       // if(RX_module == 1)
-       // { rx.setVolume(Volume); 
-       // delay(100);
+
+       Mem_Settings.begin("SettingsEEPROM", false);
+       Mem_Settings.putUInt("VOL", Volume);
+       Mem_Settings.end();
+       
+       delay(100);
      }
 
      if(RX_module == 1)
      {
+       if(Volume != Mem_Volume)
+       {
+         rx.setVolume(Volume);
+         Mem_Volume = Volume;
+       }
+       
        if(RSSI_Tr_act == 1)
        {
          RSSI_val = rx.getRssi();
@@ -1605,7 +1644,6 @@ void setup() {
         Serial.println("Connecting to Tally Arbiter host: " + String(ServIP) + " Port:" + String(ServPort));
         socket.onEvent(socket_event);
         socket.begin(ServIP, atol(ServPort));
-        Wifi_st = Connected;
       }
       else
       { 
@@ -1625,6 +1663,9 @@ void setup() {
 }
 
 void loop() {
+  
+  static unsigned long LastTick, Stop_time;
+  static byte socket_block_flag;
 
   if(ConnectMode == 1)
   {
@@ -1632,7 +1673,21 @@ void loop() {
   }
   else
   {
-     socket.loop();
+     LastTick = millis();
+     if(socket_block_flag != 1)
+     { socket.loop(); }
+     else
+     {
+       if(millis() > Stop_time)
+       socket_block_flag = 0;
+       Wifi_st = Not_connected;
+     }
+     if(millis() > LastTick + 1000)
+     {
+        socket_block_flag = 1;
+        Stop_time = millis() + 10000;
+     }
+     
      St_Leds();
      COM_Port_Commands();
      Main_Process();
