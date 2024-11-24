@@ -192,10 +192,14 @@ void COM_Write(char Message[], char CharNum)
 
 int CharCnt(char mess[])
 {
-  int CNT = 0;
+  int CNT = 0, Chr = 0;
   while(mess[CNT] != 0)
-  {CNT++;}
-  return CNT;
+  {
+    if((byte)mess[CNT] >= (byte)0x20)
+    {Chr++;}
+    CNT++;
+  }
+  return Chr;
 }
 
 unsigned int GetNumFromStr(char Arr[], byte k)
@@ -286,19 +290,19 @@ void COM_Port_Commands()
      {
         HAL_Delay(100);
 
-        Serial.println("DVM" + String((byte)WorkMode));
+        Serial.println("DVM" + String(WorkMode));
         HAL_Delay(100);
 
-        Serial.println("TLM"+ String((byte)Tally));
+        Serial.println("TLM"+ String(Tally));
         HAL_Delay(100);
 
-        Serial.println("LBT"+ String((byte)ButtonHold));
+        Serial.println("LBT"+ String(ButtonHold));
         HAL_Delay(100);
 
-        Serial.println("RXM"+ String((byte)RX_module));
+        Serial.println("RXM"+ String(RX_module));
         HAL_Delay(100);
 
-        Serial.println("TXM"+ String((byte)TX_module));
+        Serial.println("TXM"+ String(TX_module));
         HAL_Delay(100);
         
         Serial.println("FMT" + Transmitter);
@@ -313,7 +317,7 @@ void COM_Port_Commands()
         Serial.println("FHR" + String((float) fm_freq_Rx / 100));
         HAL_Delay(100);
 
-        Serial.println("WFM"+ String((byte)WiFi_module));
+        Serial.println("WFM"+ String(WiFi_module));
         HAL_Delay(100);
         
         Serial.println("WFV" + WifiVersion);
@@ -325,7 +329,7 @@ void COM_Port_Commands()
         Serial.println("WFK" + Key);
         HAL_Delay(100);
 
-        Serial.println("DHC"+ String((byte)DHCP));
+        Serial.println("DHC"+ String(DHCP));
         HAL_Delay(100);
 
         Serial.println("DIP" + DevIP);
@@ -405,20 +409,22 @@ void COM_Port_Commands()
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'A')
      {
         char RxCnt = CharCnt(RX_Message); 
+        AP = "";
         if(RxCnt == 3)
         {
           Serial.println("WFA" + Access_point);
         }
         else
-        {       
+        {   
+          Mem_Settings.remove("WFA");     
           if(RxCnt > 3 && RxCnt - 3 < 40)
           {
             Mem_Settings.begin("SettingsEEPROM", false);
             for(int i = 3; i<RxCnt; i++)
             {
-              if(RX_Message[i] >= 0x20)
-              { AP+= RX_Message[i]; }
-            }
+              if((byte)RX_Message[i] >= (byte)0x20)
+              { AP+= RX_Message[i];}
+            } 
             Mem_Settings.putString("WFA", AP);
             Serial.println("WFA OK");
             Mem_Settings.end();
@@ -433,18 +439,20 @@ void COM_Port_Commands()
      if(RX_Message[0] == 'W' && RX_Message[1] == 'F' && RX_Message[2] == 'K')
      {
         char RxCnt = CharCnt(RX_Message);  
+        AP = "";
         if(RxCnt == 3)
         {
           Serial.println("WFK" + Key);
         }
         else
-        {      
+        {     
+          Mem_Settings.remove("WFK"); 
           if(RxCnt > 3 && RxCnt - 3 < 40)
           {
             Mem_Settings.begin("SettingsEEPROM", false);
             for(int i = 3; i<RxCnt; i++)
             {
-              if(RX_Message[i] >= 0x20)
+              if((byte)RX_Message[i] >= 0x20)
               { AP+= RX_Message[i]; }
             }
             Mem_Settings.putString("WFK", AP);
@@ -1136,6 +1144,7 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
     case sIOtype_CONNECT:
       socket_Connected((char*)payload, length);
       Wifi_st = Connected;
+      Serial.println("Tally server: connected");
       break;
 
     case sIOtype_DISCONNECT:
@@ -1215,14 +1224,17 @@ void St_Leds()
 
   if(Timer_cnt <= 3)
   {
-    if(Wifi_st == Not_connected)
-    { 
-      digitalWrite(WiFi_Red, HIGH); 
-    }
+    if(WiFi_module == 1)
+    {
+      if(Wifi_st == Not_connected)
+      { 
+        digitalWrite(WiFi_Red, HIGH); 
+      }
     
-    if(Wifi_st == Connected)
-    { 
-      digitalWrite(WiFi_Green, HIGH); 
+      if(Wifi_st == Connected)
+      { 
+        digitalWrite(WiFi_Green, HIGH); 
+      }
     }
     
     if(Wifi_st == Disabled)
@@ -1256,6 +1268,25 @@ void St_Leds()
   
   if(Timer_cnt > 100)
   Timer_cnt = 0;
+}
+
+void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info){
+  Serial.println("Connected to AP successfully!");
+}
+
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info){
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+  Serial.println("Disconnected from WiFi access point");
+  Serial.println("Trying to Reconnect");
+  WiFi.onEvent(WiFiStationConnected,ARDUINO_EVENT_WIFI_STA_CONNECTED);
+  WiFi.onEvent(WiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+  WiFi.begin(Access_point, Key);
 }
 
 void Main_Process()
@@ -1318,6 +1349,10 @@ void Main_Process()
          }
          delay(20);
        }
+     }
+     else
+     {
+       delay(20);
      }
      
   
@@ -1462,7 +1497,7 @@ void setup() {
   Serial.println("Starting system...");
   Serial.println("Reading settings from EEPROM");
   EEPROM_Read_Settings();
-  Serial.println("Reading settings from EEPROM ... Ok");
+  Serial.println("Reading settings from EEPROM ... Ok");  
 
   Serial.println("Config. HW");
   pinMode(Sw_bt, INPUT);
@@ -1492,7 +1527,7 @@ void setup() {
   Serial.println("Config. I2C");
   Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
   delay(50);
-  Serial.println("Config. I2C... Ok");
+  Serial.println("Config. I2C... Ok"); 
 
   Serial.println("Check red LED");  
   digitalWrite(PWR_Red, HIGH);
@@ -1571,7 +1606,7 @@ void setup() {
       rx.setFrequency(fm_freq_Rx);
       rx.setVolume(Volume);
       rx.setMono(0);
-      Serial.println("Radio receiver... Ok");
+      Serial.println("Radio receiver... Ok"); 
     }
     else
     {
@@ -1584,10 +1619,15 @@ void setup() {
       fmtx_init(fm_freq_Tx, EUROPE);
       delay(10);
       Eter_State(0);
-      Serial.println("Radio transmitter... Ok");
+      Serial.println("Radio transmitter... Ok"); 
     } 
     else
     {Serial.println("Radio transmitter disabled");}
+
+    if(Tally == 0)
+    {
+      Serial.println("Tally disabled");
+    }
 
     if(WiFi_module == 1)
     {
@@ -1596,7 +1636,8 @@ void setup() {
       Serial.println(Access_point);
       digitalWrite(WiFi_Red, HIGH);
       Wifi_st = Not_connected;
-      
+
+      WiFi.setHostname("Tally");
       WiFi.begin(Access_point, Key);
       //WiFi.begin("StarNet - victor.m03", "485754434306BFAF");
 
@@ -1604,18 +1645,23 @@ void setup() {
       {
         digitalWrite(WiFi_Green, LOW);
         digitalWrite(WiFi_Red, HIGH);
+        Main_Process();
         delay(250);
         Serial.print(".");
         digitalWrite(WiFi_Green, HIGH);
         digitalWrite(WiFi_Red, LOW);
+        Main_Process();
         delay(250);
         WiFi_Connect_CNT++;
+        COM_Port_Commands();
+        Main_Process();
       }
-
+      
       Serial.println();
      
       if(WiFi_Connect_CNT < 50)
       {
+        WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
         Serial.println("Starting WiFi... Ok");
         Serial.println("IP address: ");
         if(DHCP == 0)
@@ -1637,13 +1683,16 @@ void setup() {
         
         digitalWrite(WiFi_Green, HIGH);
         digitalWrite(WiFi_Red, LOW);
-
-        ServerIP.toCharArray(ServIP, ServerIP.length()+1);
-        ServerPort.toCharArray(ServPort, ServerPort.length()+1);
         
-        Serial.println("Connecting to Tally Arbiter host: " + String(ServIP) + " Port:" + String(ServPort));
-        socket.onEvent(socket_event);
-        socket.begin(ServIP, atol(ServPort));
+        if(Tally == 1)
+        {
+          ServerIP.toCharArray(ServIP, ServerIP.length()+1);
+          ServerPort.toCharArray(ServPort, ServerPort.length()+1);
+        
+          Serial.println("Connecting to Tally Arbiter host: " + String(ServIP) + " Port:" + String(ServPort));
+          socket.onEvent(socket_event);
+          socket.begin(ServIP, atol(ServPort));
+        }
       }
       else
       { 
@@ -1674,7 +1723,7 @@ void loop() {
   else
   {
      LastTick = millis();
-     if(socket_block_flag != 1)
+     if(socket_block_flag != 1 && Tally != 0)
      { socket.loop(); }
      else
      {
@@ -1686,6 +1735,7 @@ void loop() {
      {
         socket_block_flag = 1;
         Stop_time = millis() + 10000;
+        Serial.println("Tally server: lost communication");
      }
      
      St_Leds();
