@@ -1491,10 +1491,19 @@ void setup() {
   char ServIP[20];
   char ServPort[10];
   int Oct1, Oct2, Oct3, Oct4;
+
+  unsigned int FreqCPU = getCpuFrequencyMhz();
+  unsigned int FreqXTAL = getXtalFrequencyMhz();
+  unsigned int FreqAPB = getApbFrequencyMhz();
   
   Serial.begin(115200);
   EEPROM.begin(1024);
   Serial.println("Starting system...");
+
+  Serial.println("CPU frequency: " + String(FreqCPU));
+  Serial.println("XTAL frequency: " + String(FreqXTAL));
+  Serial.println("APB frequency: " + String(FreqAPB));
+  
   Serial.println("Reading settings from EEPROM");
   EEPROM_Read_Settings();
   Serial.println("Reading settings from EEPROM ... Ok");  
