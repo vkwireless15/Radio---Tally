@@ -290,62 +290,71 @@ void COM_Port_Commands()
      {
         HAL_Delay(100);
 
-        Serial.println("DVM" + String(WorkMode));
+        Serial.print("DVM ");
+        Serial.println(WorkMode,DEC);
         HAL_Delay(100);
 
-        Serial.println("TLM"+ String(Tally));
+        Serial.print("TLM ");
+        Serial.println(Tally,DEC);
         HAL_Delay(100);
 
-        Serial.println("LBT"+ String(ButtonHold));
+        Serial.print("LBT ");
+        Serial.println(ButtonHold,DEC);
         HAL_Delay(100);
 
-        Serial.println("RXM"+ String(RX_module));
+        Serial.print("RXM ");
+        Serial.println(RX_module,DEC);
         HAL_Delay(100);
 
-        Serial.println("TXM"+ String(TX_module));
+        Serial.print("TXM ");
+        Serial.println(TX_module,DEC);
         HAL_Delay(100);
         
-        Serial.println("FMT" + Transmitter);
+        Serial.println("FMT " + Transmitter);
         HAL_Delay(100);
 
-        Serial.println("FMR" + Receiver);
+        Serial.println("FMR " + Receiver);
         HAL_Delay(100);
 
-        Serial.println("FHT" + String((float) fm_freq_Tx / 100));
+        Serial.println("FHT " + String((float) fm_freq_Tx / 100));
         HAL_Delay(100);
 
-        Serial.println("FHR" + String((float) fm_freq_Rx / 100));
+        Serial.println("FHR " + String((float) fm_freq_Rx / 100));
         HAL_Delay(100);
 
-        Serial.println("WFM"+ String(WiFi_module));
+        Serial.print("WFM ");
+        Serial.println(WiFi_module,DEC);
         HAL_Delay(100);
         
-        Serial.println("WFV" + WifiVersion);
+        Serial.println("WFV " + WifiVersion);
         HAL_Delay(100);
 
-        Serial.println("WFA" + Access_point);
+        Serial.println("WFA " + Access_point);
         HAL_Delay(30);
 
-        Serial.println("WFK" + Key);
+        Serial.println("WFK " + Key);
         HAL_Delay(100);
 
-        Serial.println("DHC"+ String(DHCP));
+        Serial.print("DHC ");
+        Serial.println(DHCP,DEC);
         HAL_Delay(100);
 
-        Serial.println("DIP" + DevIP);
+        Serial.println("DIP " + DevIP);
         HAL_Delay(100);
 
-        Serial.println("SIP" + ServerIP);
+        Serial.println("SIP " + ServerIP);
         HAL_Delay(100);
 
-        Serial.println("PRT" + ServerPort);
+        Serial.println("PRT " + ServerPort);
         HAL_Delay(100);
 
-        Serial.println("DID" + DeviceId);
+        Serial.println("DID " + DeviceId);
         HAL_Delay(100);
 
-        Serial.println("DNM" + listenerDeviceName);
+        Serial.println("DNM " + listenerDeviceName);
         HAL_Delay(100);
+
+        Serial.println("GP Ok");
 
      }
 
@@ -356,7 +365,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);  
         if(RxCnt == 3)
         {
-          Serial.println("VOL" + String(Volume));
+          Serial.println("VOL " + String(Volume));
         }
         else
         {
@@ -381,7 +390,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("DVM" + String(WorkMode));
+          Serial.println("DVM " + String(WorkMode));
         }
         else
         {
@@ -412,7 +421,7 @@ void COM_Port_Commands()
         AP = "";
         if(RxCnt == 3)
         {
-          Serial.println("WFA" + Access_point);
+          Serial.println("WFA " + Access_point);
         }
         else
         {   
@@ -442,7 +451,7 @@ void COM_Port_Commands()
         AP = "";
         if(RxCnt == 3)
         {
-          Serial.println("WFK" + Key);
+          Serial.println("WFK " + Key);
         }
         else
         {     
@@ -472,7 +481,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);  
         if(RxCnt == 3)
         {
-          Serial.println("FHT" + String(fm_freq_Tx));
+          Serial.println("FHT " + String(fm_freq_Tx));
         }
         else
         {
@@ -504,7 +513,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);  
         if(RxCnt == 3)
         {
-          Serial.println("FHR" + String(fm_freq_Rx));
+          Serial.println("FHR " + String(fm_freq_Rx));
         }
         else
         {
@@ -534,7 +543,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);  
         if(RxCnt == 3)
         {
-          Serial.println("SSA" + String(RSSI_val));
+          Serial.println("SSA " + String(RSSI_val));
         }
         else
         {
@@ -558,7 +567,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("RTE" + String(RSSI_Tr_act));
+          Serial.println("RTE " + String(RSSI_Tr_act));
         }
         else
         {
@@ -588,7 +597,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);    
         if(RxCnt == 3)
         {
-          Serial.println("DID" + DeviceId);
+          Serial.println("DID " + DeviceId);
         }
         else
         {     
@@ -616,7 +625,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("RXM" + String(RX_module));
+          Serial.println("RXM " + String(RX_module));
         }
         else
         {
@@ -643,7 +652,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("TXM" + String(TX_module));
+          Serial.println("TXM " + String(TX_module));
         }
         else
         {
@@ -672,7 +681,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("TLM" + String(Tally));
+          Serial.println("TLM " + String(Tally));
         }
         else
         {
@@ -701,7 +710,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("WFM" + String(WiFi_module));
+          Serial.println("WFM " + String(WiFi_module));
         }
         else
         {
@@ -730,7 +739,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("LBT" + String(ButtonHold));
+          Serial.println("LBT " + String(ButtonHold));
         }
         else
         {
@@ -759,7 +768,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("DHC" + String(DHCP));
+          Serial.println("DHC " + String(DHCP));
         }
         else
         {
@@ -789,7 +798,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message);
         if(RxCnt == 3)
         {
-          Serial.println("SIP" + ServerIP);
+          Serial.println("SIP " + ServerIP);
         }
         else
         {        
@@ -817,7 +826,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message); 
         if(RxCnt == 3)
         {
-          Serial.println("DIP" + DevIP);
+          Serial.println("DIP " + DevIP);
         }
         else
         {        
@@ -845,7 +854,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message); 
         if(RxCnt == 3)
         {
-          Serial.println("DGA" + GatewayIP);
+          Serial.println("DGA " + GatewayIP);
         }
         else
         {         
@@ -873,7 +882,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message); 
         if(RxCnt == 3)
         {
-          Serial.println("DSA" + SubnetIP);
+          Serial.println("DSA " + SubnetIP);
         }
         else
         {         
@@ -901,7 +910,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message); 
         if(RxCnt == 3)
         {
-          Serial.println("PRT" + ServerPort);
+          Serial.println("PRT " + ServerPort);
         }
         else
         {         
@@ -929,7 +938,7 @@ void COM_Port_Commands()
         char RxCnt = CharCnt(RX_Message); 
         if(RxCnt == 3)
         {
-          Serial.println("DNM" + listenerDeviceName);
+          Serial.println("DNM " + listenerDeviceName);
         }
         else
         {         
@@ -1289,6 +1298,16 @@ void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
   WiFi.begin(Access_point, Key);
 }
 
+String toString(IPAddress& ip) { // IP v4 only
+  String ips;
+  ips.reserve(16);
+  ips = ip[0];  ips += '.';
+  ips += ip[1]; ips += '.';
+  ips += ip[2]; ips += '.';
+  ips += ip[3];
+  return ips;
+}
+
 void Main_Process()
 {
   if(digitalRead(Vol_P) == 0)
@@ -1494,7 +1513,7 @@ void setup() {
 
   unsigned int FreqCPU = getCpuFrequencyMhz();
   unsigned int FreqXTAL = getXtalFrequencyMhz();
-  unsigned int FreqAPB = getApbFrequencyMhz();
+  //unsigned int FreqAPB = getApbFrequencyMhz();
   
   Serial.begin(115200);
   EEPROM.begin(1024);
@@ -1502,7 +1521,7 @@ void setup() {
 
   Serial.println("CPU frequency: " + String(FreqCPU));
   Serial.println("XTAL frequency: " + String(FreqXTAL));
-  Serial.println("APB frequency: " + String(FreqAPB));
+  //Serial.println("APB frequency: " + String(FreqAPB));
   
   Serial.println("Reading settings from EEPROM");
   EEPROM_Read_Settings();
@@ -1626,8 +1645,9 @@ void setup() {
     {
       Serial.println("Starting radio transmitter");
       fmtx_init(fm_freq_Tx, EUROPE);
-      delay(10);
-      Eter_State(0);
+      delay(3000);
+      //fmtx_set_rfgain(15);
+      //Eter_State(0);
       Serial.println("Radio transmitter... Ok"); 
     } 
     else
@@ -1686,7 +1706,8 @@ void setup() {
         }
         else
         {
-          DevIP = (String)WiFi.localIP();
+          IPAddress address = WiFi.localIP();
+          DevIP = toString(address);
           Serial.println(DevIP);
         }
         
@@ -1733,7 +1754,7 @@ void loop() {
   {
      LastTick = millis();
      if(socket_block_flag != 1 && Tally != 0)
-     { socket.loop(); }
+     { socket.loop(); Wifi_st = Connected; }
      else
      {
        if(millis() > Stop_time)
