@@ -1646,7 +1646,7 @@ void setup() {
       Serial.println("Starting radio transmitter");
       fmtx_init(fm_freq_Tx, EUROPE);
       delay(3000);
-      //fmtx_set_rfgain(15);
+      fmtx_set_rfgain(15);
       //Eter_State(0);
       Serial.println("Radio transmitter... Ok"); 
     } 
